@@ -77,7 +77,12 @@ def convexity_lens(contracts, S, r, realized_vol_val, catalyst_dte, cfg, tier="T
         otm_pct = (c["strike"] - S) / S * 100.0
         if otm_pct > cvx["cvx_otm_max_pct"]:
             continue
-        if c["mid"] > cvx["cvx_prem_max_usd"]:
+        # 權利金上限:相對股價(%),隨股價縮放。$1154 的股票 $1.5 絕對上限沒意義。
+        prem_cap_pct = cvx.get("cvx_prem_max_pct")
+        if prem_cap_pct is not None:
+            if c["mid"] > prem_cap_pct / 100.0 * S:
+                continue
+        elif c["mid"] > cvx.get("cvx_prem_max_usd", float("inf")):  # 後備:舊式絕對上限
             continue
         # 到期需在催化劑之後、且不遠(用 earn_window 當寬容)
         if not (catalyst_dte <= c["dte"] <= catalyst_dte + cvx["earn_window_days"] + 45):

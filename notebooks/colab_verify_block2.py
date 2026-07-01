@@ -52,11 +52,15 @@ def build_contracts(t, S, min_dte, max_dte, otm_only=False):
         calls = tk.option_chain(exp).calls
         for _, row in calls.iterrows():
             bid, ask, K = row["bid"], row["ask"], row["strike"]
-            if bid <= 0 or ask <= 0:
-                continue
             if otm_only and K <= S:
                 continue
-            mid = (bid + ask) / 2
+            # 盤中用 mid;收盤後 bid/ask 常為 0 → 退回 lastPrice
+            if bid > 0 and ask > 0:
+                mid = (bid + ask) / 2
+            elif (row.get("lastPrice") or 0) > 0:
+                mid = float(row["lastPrice"])
+            else:
+                continue
             iv = bsm.implied_vol(mid, S, K, d / 365.0, R)
             if iv is None:
                 continue

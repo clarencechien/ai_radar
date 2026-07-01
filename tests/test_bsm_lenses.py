@@ -13,7 +13,7 @@ CFG = {
     "liquidity": {"min_oi": 100, "min_vol": 10, "max_spread_pct": 10},
     "leverage": {"lev_iv_pct_max": 40, "lev_delta_lo": 0.70, "lev_delta_hi": 0.85,
                  "lev_dte_min": 365, "lev_pick_metric": "min_extrinsic_per_delta"},
-    "convexity": {"cvx_iv_ratio_max": 1.3, "cvx_prem_max_usd": 1.5, "cvx_otm_max_pct": 25,
+    "convexity": {"cvx_iv_ratio_max": 1.3, "cvx_prem_max_pct": 1.5, "cvx_otm_max_pct": 25,
                   "earn_window_days": 10, "target_move_pct": 30,
                   "racehorse_tiers": {"T1": {"cvx_iv_ratio_max": 1.1},
                                       "T2": {"cvx_iv_ratio_max": 1.5}}},
@@ -115,6 +115,22 @@ def test_convexity_lens_pass_and_pick():
                          catalyst_dte=30, cfg=CFG, tier="T2")
     assert out["verdict"] == "PASS"
     assert out["metrics"]["otm_pct"] <= CFG["convexity"]["cvx_otm_max_pct"]
+
+
+def test_convexity_lens_high_priced_stock_relative_cap():
+    """MU $1154 案例:$15 的價外 call 在絕對 $1.5 上限會被誤殺,
+    相對上限(1.5%×1154≈$17.3)應放行。鎖住這個修正。"""
+    S, r = 1154.0, 0.045
+    chain = [_mk(1250, 100, 15.0, 0.60)]   # 價外 ~8.3%、$15 權利金
+    out = convexity_lens(chain, S, r, realized_vol_val=0.90,
+                         catalyst_dte=84, cfg=CFG, tier="T2")
+    assert out["verdict"] == "PASS", out
+    # 若把上限改回絕對 $1.5,同一張會被 CVX_NO_STRIKE 擋掉
+    cfg_abs = {**CFG, "convexity": {**CFG["convexity"]}}
+    cfg_abs["convexity"].pop("cvx_prem_max_pct")
+    cfg_abs["convexity"]["cvx_prem_max_usd"] = 1.5
+    out2 = convexity_lens(chain, S, r, 0.90, 84, cfg_abs, tier="T2")
+    assert out2["verdict"] == "EXCLUDE" and out2["code"] == "CVX_NO_STRIKE"
 
 
 def test_convexity_lens_no_catalyst_skips():
