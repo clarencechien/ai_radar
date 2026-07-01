@@ -15,7 +15,7 @@
 ## 進度
 - [x] **Block 1 宇宙管線** — ETF 成分聯集 → 濾可 option → GICS 歸桶 + refine(append-only)。純邏輯已測。
 - [ ] Block 1.5 — 接真 ETF 持股 CSV(取代 seed 清單)。
-- [ ] Block 2 — 雙透鏡(槓桿 / 凸性)+ BSM 自算 Greeks。
+- [x] **Block 2 — 雙透鏡** — BSM 自算 Greeks + IV 反解 + 實現波動 + percentile 自舉。純數學已測(對照教科書值)。
 - [ ] Block 3 — 造合約模組(條件式 call 合約卡)。
 - [ ] Block 4 — 催化劑 helper。
 - [ ] Block 5 — shadow tracer(先 collect_only)。
