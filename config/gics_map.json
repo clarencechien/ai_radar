@@ -1,5 +1,5 @@
 {
-  "_note": "key 對準 yfinance Ticker.info['industry'] 的實際字串,非官方 GICS。跑 Colab dump 後校準。",
+  "_note": "key 對準 yfinance Ticker.info['industry'] 實際字串。只保留『夠專一、不會誤收非AI股』的映射;寬泛 industry(如 Specialty Industrial Machinery)一律走 refine 明確指定。",
   "Semiconductors": "半導體",
   "Semiconductor Equipment & Materials": "設備",
   "Software - Infrastructure": "賽馬",
@@ -8,7 +8,5 @@
   "Internet Retail": "賽馬",
   "Utilities - Independent Power Producers": "電力",
   "Utilities - Regulated Electric": "電力",
-  "Utilities - Renewable": "電力",
-  "Specialty Industrial Machinery": "電力",
-  "Electrical Equipment & Parts": "電力"
+  "Utilities - Renewable": "電力"
 }
