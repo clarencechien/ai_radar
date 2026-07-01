@@ -15,9 +15,12 @@ YEAR = 365.0
 
 
 def _passes_liquidity(c, liq) -> bool:
+    # OI 是硬門檻(每日結算、收盤後仍在,LEAPS 的主要流動性訊號)
     if c.get("oi", 0) < liq["min_oi"]:
         return False
-    if c.get("volume", 0) < liq["min_vol"]:
+    # volume 僅在「有記錄到成交」時才生效;收盤後 volume=0 不因此淘汰,靠 OI
+    vol = c.get("volume", 0) or 0
+    if vol > 0 and vol < liq["min_vol"]:
         return False
     return True
 
