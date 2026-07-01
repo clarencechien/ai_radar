@@ -1,0 +1,21 @@
+{
+  "universe":  { "etf_sources": ["AIQ","SMH","SOXX","DRAM"], "fetch_cadence": "weekly",
+                 "require_us_options": true,
+                 "gics_to_bucket": "config/gics_map.json", "refine_override": "config/refine.json" },
+  "liquidity": { "min_oi": 500, "min_vol": 100, "max_spread_pct": 10 },
+  "leverage":  { "lev_iv_pct_max": 40, "lev_delta_lo": 0.70, "lev_delta_hi": 0.85,
+                 "lev_dte_min": 365, "lev_pick_metric": "min_extrinsic_per_delta" },
+  "convexity": { "cvx_iv_ratio_max": 1.3, "cvx_prem_max_usd": 1.5, "cvx_otm_max_pct": 25,
+                 "earn_window_days": 10, "cvx_pick_metric": "max_gamma_per_premium",
+                 "target_move_pct": 30,
+                 "racehorse_tiers": { "T1": { "cvx_iv_ratio_max": 1.1, "soft_catalyst": true },
+                                      "T2": { "cvx_iv_ratio_max": 1.5, "soft_catalyst": false } } },
+  "exposure":  { "enabled": false, "tsm_exposure_max_pct": 15, "tsm_current_pct": null },
+  "data":      { "source": "yfinance", "iv_percentile_min_history_days": 60,
+                 "realized_vol_window_days": 20 },
+  "catalyst":  { "surface_earnings": true, "lookahead_days": 60 },
+  "tracer":    { "horizons_days": [5,10,20], "review_cadence": "weekly",
+                 "mode": "collect_only", "min_samples": 30 },
+  "buckets":   { "製造": 0, "加速器": 0.30, "記憶體": 0.25,
+                 "設備": 0.15, "電力": 0.10, "賽馬": 0.20 }
+}

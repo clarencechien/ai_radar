@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+# state 是 append-only 資料,預設不進版控(可依需求改)
+state/*.jsonl
