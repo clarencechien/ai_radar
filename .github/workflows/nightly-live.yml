@@ -35,15 +35,15 @@ jobs:
       - name: live 掃描(yfinance;缺資料 NO_DATA 降級)
         run: python notebooks/colab_verify_block2.py
 
-      - name: commit state 樣本(IV 自舉 + tracer)
+      - name: commit state 樣本 + RADAR.md 報告
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state/iv_history.jsonl state/tracer.jsonl
+          git add state/iv_history.jsonl state/tracer.jsonl RADAR.md
           if git diff --cached --quiet; then
-            echo "state 無新樣本(同日已收或 live 全 NO_DATA),不 commit"
+            echo "state/報告皆無變化,不 commit"
           else
-            git commit -m "state: nightly live scan samples ($(date -u +%F))"
+            git commit -m "radar: nightly scan report + state samples ($(date -u +%F))"
             git pull --rebase origin main
             git push origin main
           fi

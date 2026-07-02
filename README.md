@@ -39,6 +39,10 @@ python notebooks/colab_verify_block1.py
 python notebooks/colab_verify_block2.py
 ```
 
+## 看結果
+**每晚掃描的人讀報告在 [`RADAR.md`](./RADAR.md)**(存活者合約卡、排除理由人話版、
+NO_DATA、自舉/tracer 進度),由 nightly Action 自動生成並 commit,不用去翻 Actions log。
+
 ## 自動化
 - `tests`(push/PR/手動):純邏輯 + 合成資料端到端回歸,不碰網路。
 - `nightly-live`(台灣平日 22:00,美股夏令盤中;可手動觸發):跑 live 掃描,
