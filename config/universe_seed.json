@@ -1,0 +1,11 @@
+{
+  "_note": "過渡期宇宙 seed(2026-07-01 Colab 實跑的 ETF 成分,無 option 者已剔除)。Block 1.5 接真 ETF 持股 CSV 後由管線自動週更,本檔淘汰。",
+  "tickers": [
+    "NVDA", "AMD", "AVGO", "MRVL",
+    "MU",
+    "TSM", "INTC",
+    "ASML", "AMAT", "LRCX", "KLAC",
+    "VST", "CEG", "GEV",
+    "GOOGL", "META", "AMZN", "MSFT", "ORCL", "PLTR"
+  ]
+}

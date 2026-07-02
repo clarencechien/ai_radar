@@ -45,9 +45,11 @@ NO_DATA、自舉/tracer 進度),由 nightly Action 自動生成並 commit,不用
 
 ## 自動化
 - `tests`(push/PR/手動):純邏輯 + 合成資料端到端回歸,不碰網路。
-- `nightly-live`(台灣平日 22:00,美股夏令盤中;可手動觸發):跑 live 掃描,
-  把 `state/iv_history.jsonl`(IV 自舉)與 `state/tracer.jsonl`(tracer 樣本)
-  自動 commit 回 main——自舉與雙向檢查靠這個累積。冬令要把 cron 改 15:00 UTC。
+- `nightly-live`(台灣平日 22:00,美股夏令盤中;可手動觸發):跑
+  `notebooks/nightly_scan.py` **全宇宙掃描**(seed 20 檔,Block 1.5 後換真 ETF 持股)
+  → 每檔:催化劑時鐘 → 路由 → 雙透鏡 → 出卡/排除 → tracer;跑完把
+  `RADAR.md` + `state/`(IV 自舉、tracer、bucket_map)自動 commit 回 main。
+  冬令要把 cron 改 15:00 UTC。單檔抓取失敗降級 `FETCH_ERROR`,不殺整晚。
 
 `colab_verify_block1.py` 會:
 1. dump 每檔 yfinance `industry` 字串 → 校準 `config/gics_map.json`

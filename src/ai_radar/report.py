@@ -15,6 +15,7 @@ CODE_TEXT = {
     "NO_CATALYST": "無帶日期催化劑(凸性透鏡不適用)",
     "LIQ_NO_OI_DATA": "Yahoo 時段性缺 OI —— 資料缺失非判斷,盤中重跑",
     "NO_CONTRACTS": "建不出合約(bid/ask 全空)—— 資料缺失非判斷",
+    "FETCH_ERROR": "抓取失敗(網路/來源異常)—— 資料缺失非判斷",
 }
 
 
@@ -71,8 +72,10 @@ def render_report(recs, *, asof, r_short=None, r_long=None, r_default=0.045,
 
     if no_data:
         L += ["", f"## NO_DATA({len(no_data)})—— 資料缺失,非判斷", ""]
-        L += [f"- **{r['ticker']}**(route={r['route']}):`{r['code']}` —— "
-              f"{CODE_TEXT.get(r['code'], '')}" for r in no_data]
+        L += [f"- **{r['ticker']}**(route={r['route'] or '—'}):`{r['code']}` —— "
+              f"{CODE_TEXT.get(r['code'], '')}"
+              + (f"(`{r['error']}`)" if r.get("error") else "")
+              for r in no_data]
 
     if iv_counts:
         L += ["", "## IV percentile 自舉進度", ""]
