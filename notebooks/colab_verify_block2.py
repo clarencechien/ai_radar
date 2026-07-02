@@ -14,11 +14,46 @@ import yfinance as yf  # noqa: E402
 from ai_radar import bsm  # noqa: E402
 from ai_radar.universe import load_json  # noqa: E402
 from ai_radar.volatility import realized_vol  # noqa: E402
-from ai_radar.lenses import leverage_lens, convexity_lens  # noqa: E402
+from ai_radar.rates import yield_quote_to_decimal, resolve_rate  # noqa: E402
+from ai_radar.state import append_record, latest_by_key, series_by_key  # noqa: E402
+from ai_radar.lenses import (  # noqa: E402
+    leverage_lens, convexity_lens, _passes_liquidity, _valid_contract)
 
 CFG = load_json(os.path.join(os.path.dirname(__file__), "..", "config", "config.json"))
-R = 0.045          # 無風險利率(之後可接 T-bill;先固定)
 TODAY = dt.date.today()
+STATE_DIR = os.path.join(os.path.dirname(__file__), "..", "state")
+IV_HISTORY = os.path.join(STATE_DIR, "iv_history.jsonl")
+
+# --- Block 2.5:真 T-bill 利率(^IRX=13週、^FVX=5年;抓不到 → 降級回預設)---
+R_DEFAULT = CFG["data"].get("risk_free_rate_default", 0.045)
+R_CUTOFF = CFG["data"].get("rate_tenor_cutoff_days", 365)
+
+
+def _fetch_yield(sym):
+    try:
+        q = yf.Ticker(sym).history(period="5d")["Close"].iloc[-1]
+        return yield_quote_to_decimal(float(q))
+    except Exception:
+        return None
+
+
+R_SHORT, R_LONG = _fetch_yield("^IRX"), _fetch_yield("^FVX")
+
+
+def rf(dte):
+    return resolve_rate(dte, R_SHORT, R_LONG, R_DEFAULT, R_CUTOFF)
+
+
+def record_atm_iv(t, S, chain):
+    """IV percentile 自舉:追加一筆 ATM IV(append-only;同一天重跑不重複灌樣本)。"""
+    if not chain:
+        return None
+    atm_iv = min(chain, key=lambda c: abs(c["strike"] - S))["iv"]
+    last = latest_by_key(IV_HISTORY).get(t)
+    if last and str(last.get("ts", "")).startswith(TODAY.isoformat()):
+        return atm_iv
+    append_record(IV_HISTORY, {"ticker": t, "iv": round(atm_iv, 4)})
+    return atm_iv
 
 
 def _safe_int(x):
@@ -72,7 +107,7 @@ def build_contracts(t, S, min_dte, max_dte, otm_only=False):
                 mid = float(row["lastPrice"])
             else:
                 continue
-            iv = bsm.implied_vol(mid, S, K, d / 365.0, R)
+            iv = bsm.implied_vol(mid, S, K, d / 365.0, rf(d))
             if iv is None:
                 continue
             out.append({"strike": float(K), "dte": d, "mid": float(mid), "iv": iv,
@@ -83,11 +118,20 @@ def build_contracts(t, S, min_dte, max_dte, otm_only=False):
 
 
 if __name__ == "__main__":
+    _fmt = lambda x: f"{x:.3%}" if x is not None else "NO_DATA"  # noqa: E731
+    print(f"無風險利率:短(^IRX)={_fmt(R_SHORT)}  長(^FVX)={_fmt(R_LONG)}  "
+          f"(缺 → 預設 {R_DEFAULT:.3%})")
+    iv_hist = series_by_key(IV_HISTORY)
+    print(f"IV 自舉樣本:NVDA {len(iv_hist.get('NVDA', []))} / MU {len(iv_hist.get('MU', []))}"
+          f"(<{CFG['data']['iv_percentile_min_history_days']} → edge 閘退用 ratio)")
+
     # --- 槓桿透鏡:NVDA LEAPS(DTE 365–900)---
-    print("=== 槓桿透鏡 · NVDA ===")
+    print("\n=== 槓桿透鏡 · NVDA ===")
     S = spot("NVDA")
+    R = rf(730)   # LEAPS 全在 cutoff 之上 → 長率
     chain = build_contracts("NVDA", S, 365, 900)
-    print(f"spot={S:.2f}  合格 LEAPS 合約 {len(chain)} 張")
+    record_atm_iv("NVDA", S, chain)
+    print(f"spot={S:.2f}  合格 LEAPS 合約 {len(chain)} 張  r={R:.3%}")
 
     # 診斷:逐關淘汰數,讓 EXCLUDE 不再是黑盒
     liq = CFG["liquidity"]
@@ -103,7 +147,7 @@ if __name__ == "__main__":
     if deltas:
         print(f"  delta 範圍 {min(deltas):.2f}–{max(deltas):.2f}")
 
-    out = leverage_lens(chain, S, R, CFG)
+    out = leverage_lens(chain, S, R, CFG, iv_history=iv_hist.get("NVDA"))
     print("verdict:", out["verdict"], out.get("code") or "")
     if out["verdict"] == "PASS":
         c = out["contract"]
@@ -114,6 +158,7 @@ if __name__ == "__main__":
     print("\n=== 凸性透鏡 · MU(催化劑=財報)===")
     S = spot("MU")
     cat_dte = next_earnings_dte("MU")
+    R = rf(cat_dte or 90)   # 財報窗在 cutoff 之下 → 短率
     rv = realized_20d("MU")
     rv_txt = f"{rv:.3f}" if rv is not None else "NO_DATA"
     if cat_dte is not None and cat_dte >= 0:
@@ -123,8 +168,29 @@ if __name__ == "__main__":
         cat_dte = None
     if cat_dte is not None:
         chain = build_contracts("MU", S, max(cat_dte, 1), cat_dte + 60, otm_only=True)
+        record_atm_iv("MU", S, chain)
+
+        # 診斷:逐關淘汰數,讓 CVX 的 EXCLUDE 不再是黑盒
+        cvx = CFG["convexity"]
+        prem_cap = cvx["cvx_prem_max_pct"] / 100.0 * S
+        dte_hi = cat_dte + cvx["earn_window_days"] + 45
+        liq_ok = [c for c in chain
+                  if _valid_contract(c) and _passes_liquidity(c, CFG["liquidity"])]
+        otm_ok = [c for c in liq_ok
+                  if 0 < (c["strike"] - S) / S * 100.0 <= cvx["cvx_otm_max_pct"]]
+        prem_ok = [c for c in otm_ok if c["mid"] <= prem_cap]
+        dte_ok = [c for c in prem_ok if cat_dte <= c["dte"] <= dte_hi]
+        print(f"  診斷:抓到 {len(chain)} 張 | 過流動性 {len(liq_ok)} | "
+              f"價外≤{cvx['cvx_otm_max_pct']}% {len(otm_ok)} | "
+              f"權利金≤${prem_cap:.1f} {len(prem_ok)} | 到期窗[{cat_dte},{dte_hi}] {len(dte_ok)}")
+        if otm_ok and not prem_ok:
+            cheapest = min(c["mid"] for c in otm_ok)
+            print(f"  最便宜的合格價外要 ${cheapest:.1f},上限 ${prem_cap:.1f} → "
+                  f"高波動下「便宜價外」不存在,權利金閘照設計排除")
+
         # MU 是記憶體桶(收費員),不是賽馬 → 不帶 tier,走基準 edge 閘
-        out = convexity_lens(chain, S, R, rv, cat_dte, CFG)
+        out = convexity_lens(chain, S, R, rv, cat_dte, CFG,
+                             iv_history=iv_hist.get("MU"))
         print("verdict:", out["verdict"], out.get("code") or "")
         if out["verdict"] == "PASS":
             c = out["contract"]

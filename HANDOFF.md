@@ -75,7 +75,7 @@ ai_radar/
 3. **lastPrice 後備**:收盤後 bid/ask 常為空 → `build_contracts` 退回 lastPrice。
 4. **流動性閘 OI 優先**:LEAPS 日成交量本就低、收盤後 volume=0。改為 **OI 硬門檻、volume 只在 >0 時才生效**(否則靠 OI)。
 5. **NaN→int 崩潰**:`int(x or 0)` 對 pandas 的 NaN 無效(NaN 是 truthy)→ 用 `_safe_int()`。
-6. **利率 r 仍固定 0.045**:長天期 LEAPS 的 delta/定價受利率影響,待接真實 T-bill(Block 2.5)。
+6. **利率 r**:~~固定 0.045~~ → Block 2.5 已接真 T-bill(`rates.py`:^IRX 短率/^FVX 長率按天期挑,抓不到降級回 `risk_free_rate_default`)。
 7. **tier 預設值修正**:`convexity_lens` 原預設 `tier="T1"`,讓非賽馬桶(如記憶體 MU)誤吃賽馬 T1 的嚴閘(1.1)。SPEC 明定 T1/T2 閘是賽馬子層專屬 → 預設改 `None`(走基準閘 1.3),只有賽馬桶才傳 tier。
 8. **價差閘補實作**:`max_spread_pct` 原本設在 config 但沒人執行。現於 `_passes_liquidity` 實作:**僅在 bid/ask 雙邊報價都存在時才生效**(收盤後報價空 → 跳過,靠 OI),與 OI 優先原則一致。notebook 的 `build_contracts` 已把 bid/ask 傳進合約 dict。
 9. **髒合約降級**:iv/mid/dte 缺失或非正的合約直接跳過(`_valid_contract`),不讓 BSM 拋 ValueError 崩潰整個透鏡(承 §2.6 NO_DATA 原則)。
@@ -84,9 +84,9 @@ ai_radar/
 
 - `liquidity`: min_oi 500 / min_vol 100(volume 軟門檻)/ max_spread_pct 10
 - `leverage`: IV percentile 上限 40、delta 區間 0.70–0.85、DTE 下限 365、挑 min_extrinsic_per_delta
-- `convexity`: **cvx_prem_max_pct 1.5(% of spot)**、OTM 上限 25%、IV÷實現波動閘 1.3、挑 max_gamma_per_premium;賽馬子層 T1 閘 1.1 / T2 閘 1.5
+- `convexity`: **cvx_prem_max_pct 1.5(% of spot)**、OTM 上限 25%、edge 閘雙基準(自舉完成→ **cvx_iv_pct_max 60**;不足→ IV÷實現波動閘 1.3)、挑 max_gamma_per_premium;賽馬子層 T1 閘 1.1 / T2 閘 1.5(子層也可各設 cvx_iv_pct_max)
 - `exposure`: **enabled false(G0 延後)**、tsm 相關留欄位
-- `data`: yfinance、IV percentile 自舉需 60 天、實現波動窗 20 天
+- `data`: yfinance、IV percentile 自舉需 60 天、實現波動窗 20 天、**risk_free_rate_default 0.045、rate_tenor_cutoff_days 365**(Block 2.5)
 - `tracer`: **mode collect_only**、min_samples 30(先收集不調參)
 - `buckets`: 製造 0(TSM 由 G0 管)/ 加速器 .30 / 記憶體 .25 / 設備 .15 / 電力 .10 / 賽馬 .20
 
@@ -99,7 +99,10 @@ ai_radar/
 
 ## 9. Roadmap(建議順序)
 
-- **Block 2.5**:接真 T-bill 利率;edge 閘基準改良(見 §8.3)。
+- ~~**Block 2.5**:接真 T-bill 利率;edge 閘基準改良(見 §8.3)~~ **已完成(純邏輯已測,Colab 驗證待跑)**:
+  - `rates.py`:^IRX(13週)/^FVX(5年)按合約天期挑,NO_DATA 降級回預設。
+  - edge 閘改雙基準:IV 自身歷史 percentile 優先(`cvx_iv_pct_max`,不受實現波動失真影響)、歷史不足退用原 ratio 閘。verdict metrics 印 `edge_basis` 標明用了哪個基準。
+  - 自舉開始收樣本:notebook 每跑一次(每 ticker 每天一筆)append ATM IV 到 `state/iv_history.jsonl`(`series_by_key` 讀回)。**注意 Colab 環境是暫時的,`state/` 要 commit 回 repo 或存 Drive,樣本才會累積。**
 - **Block 1.5**:接真 ETF 持股 CSV(發行商每日公布,免費;各家 URL 格式不一、會改版,是髒活)。同時處理「半導體粗桶 limbo」——不在 refine 的半導體個股會卡在粗桶「半導體」(非權重桶),要輸出「需人工補 refine」提醒清單。
 - **賽馬 T1/T2 tier_map**:yfinance 分不出 PLTR(T2)vs MSFT/ORCL(T1,都是 "Software - Infrastructure")→ 需手動 tier_map(像 refine)。破壞線**按名不按桶**(賽馬賭哪匹馬贏,是個股特有的事)。
 - **Block 3**:造合約 + **路由器**。路由靠**論點時鐘**:某檔現在有沒有帶日期的催化劑(財報/合約報價/發表)→ 有進凸性透鏡、沒有進槓桿透鏡。把兩透鏡輸出組裝成 spec §7 那張條件式合約卡。

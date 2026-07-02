@@ -36,6 +36,19 @@ def read_records(path: str) -> Iterator[dict]:
                 yield json.loads(line)
 
 
+def series_by_key(path: str, key: str = "ticker", field: str = "iv") -> dict:
+    """把 append-only 紀錄摺疊成「每個 key 的 field 時間序列」(依 append 順序)。
+
+    供 IV percentile 自舉:iv_history.jsonl 每天追加一筆 ATM IV,讀回成序列。
+    field 為 None 的紀錄跳過(NO_DATA 不進樣本)。
+    """
+    out: dict = {}
+    for rec in read_records(path):
+        if key in rec and rec.get(field) is not None:
+            out.setdefault(rec[key], []).append(rec[field])
+    return out
+
+
 def latest_by_key(path: str, key: str = "ticker") -> dict:
     """把 append-only 紀錄摺疊成「每個 key 的最新一筆」。
 
