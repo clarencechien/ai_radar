@@ -2,8 +2,10 @@ name: tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "claude/**" ]
   pull_request:
+  # 手動觸發(Actions 頁 Run workflow / API):離線回歸 = 全套單元 + 端到端整合
+  workflow_dispatch:
 
 jobs:
   pytest:
@@ -14,5 +16,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pytest
-      # 只跑純邏輯測試;live(yfinance/ETF 抓取)不進 CI,由 Colab 驗
+      # 只跑純邏輯/合成資料測試;live(yfinance/ETF 抓取)不進 CI,由 Colab 驗
       - run: python -m pytest tests/ -v

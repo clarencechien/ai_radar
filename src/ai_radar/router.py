@@ -22,11 +22,13 @@ def route(catalyst_dte) -> str:
 
 
 def build_card(ticker, bucket, lens_result, S, r, *, tier=None, catalyst_dte=None,
-               g0_enabled=False, asof=None):
+               g0_enabled=False, asof=None, target_move_pct=None):
     """透鏡 PASS 的 verdict → 合約卡(SPEC §6 卡欄位);非 PASS 回 None。
 
     欄位:標的·桶·子層·透鏡·催化劑 T-N·到期·strike·估權利金·delta·
     時間價值·倍數·損益兩平%·G0 狀態·資料時戳·條件式聲明。
+    target_move_pct(config convexity.target_move_pct):給情境倍數——
+    「若標的漲到 +N%,這張的內含價值是權利金幾倍」(保守,不含剩餘時間價值)。
     """
     if lens_result.get("verdict") != "PASS":
         return None
@@ -34,7 +36,13 @@ def build_card(ticker, bucket, lens_result, S, r, *, tier=None, catalyst_dte=Non
     K, mid, dte = c["strike"], c["mid"], c["dte"]
     g = bsm.greeks(S, K, dte / YEAR, r, c["iv"])
     intrinsic = max(S - K, 0.0)
+    scenario = {}
+    if target_move_pct:
+        s_target = S * (1.0 + target_move_pct / 100.0)
+        scenario = {"target_move_pct": target_move_pct,
+                    "multiple_at_target": round(max(s_target - K, 0.0) / mid, 1)}
     return {
+        **scenario,
         "ticker": ticker, "bucket": bucket, "tier": tier,
         "lens": lens_result["lens"],
         "catalyst_t_minus": catalyst_dte,
@@ -66,7 +74,9 @@ def scan_one(ticker, bucket, S, r, contracts, cfg, *, catalyst_dte=None,
     else:
         res = leverage_lens(contracts, S, r, cfg, iv_history=iv_history)
     card = build_card(ticker, bucket, res, S, r, tier=tier, catalyst_dte=catalyst_dte,
-                      g0_enabled=cfg.get("exposure", {}).get("enabled", False), asof=asof)
+                      g0_enabled=cfg.get("exposure", {}).get("enabled", False), asof=asof,
+                      target_move_pct=(cfg["convexity"].get("target_move_pct")
+                                       if lens == "convexity" else None))
     return {"ticker": ticker, "bucket": bucket, "tier": tier, "route": lens,
             "verdict": res["verdict"], "code": res.get("code"),
             "spot": round(S, 2),   # tracer 回填 T+N 報酬的基準
@@ -82,7 +92,9 @@ def format_card(card) -> str:
         f"│ 若動手:{card['expiry']} ${card['strike']:g}C @ ~${card['premium']}"
         f"(spot {card['spot']})",
         f"│ delta {card['delta']} · 時間價值 ${card['extrinsic']} · "
-        f"倍數 {card['eff_leverage']}x · 損益兩平 +{card['breakeven_pct']}%",
+        f"倍數 {card['eff_leverage']}x · 損益兩平 +{card['breakeven_pct']}%"
+        + (f" · 若+{card['target_move_pct']:g}% 內含 {card['multiple_at_target']}×"
+           if card.get("target_move_pct") else ""),
         f"│ G0:{card['g0']}",
         f"└ {card['note']}(資料時戳 {card['asof']})",
     ])
