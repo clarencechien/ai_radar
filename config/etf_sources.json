@@ -1,0 +1,19 @@
+{
+  "_note": "發行商持股 CSV。URL 各家格式不一且會改版(髒活)——抓不到逐級降級:issuer CSV → yfinance 前十大 → 前次快照 → universe_seed。首次跑完看 RADAR.md 的宇宙來源行確認哪個來源活著。",
+  "SMH": {
+    "issuer": "VanEck",
+    "csv_url": "https://www.vaneck.com/us/en/investments/semiconductor-etf-smh/holdings/?download=true"
+  },
+  "SOXX": {
+    "issuer": "iShares",
+    "csv_url": "https://www.ishares.com/us/products/239705/ishares-phlx-semiconductor-etf/1467271812596.ajax?fileType=csv&fileName=SOXX_holdings&dataType=fund"
+  },
+  "AIQ": {
+    "issuer": "GlobalX",
+    "csv_url": "https://www.globalxetfs.com/funds/aiq/?download_full_holdings=true"
+  },
+  "DRAM": {
+    "issuer": null,
+    "csv_url": null
+  }
+}

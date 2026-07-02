@@ -8,3 +8,4 @@ state/*.jsonl
 !state/iv_history.jsonl
 !state/tracer.jsonl
 !state/bucket_map.jsonl
+!state/universe.jsonl

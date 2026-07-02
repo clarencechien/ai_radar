@@ -70,7 +70,7 @@ def test_scan_universe_routes_degrades_and_reports():
 
     # 報告吃得下整批紀錄(含 FETCH_ERROR 行)
     md = render_report(recs, asof="2026-07-02T22:00")
-    assert "存活者(2)" in md and "NO_DATA(1)" in md
+    assert "通過濾網 **2 檔**" in md and "NO_DATA(1)" in md
     assert "抓取失敗" in md and "ConnectionError" in md
 
 

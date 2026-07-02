@@ -14,7 +14,7 @@
 
 ## 進度
 - [x] **Block 1 宇宙管線** — ETF 成分聯集 → 濾可 option → GICS 歸桶 + refine(append-only)。純邏輯已測。
-- [ ] Block 1.5 — 接真 ETF 持股 CSV(取代 seed 清單)。
+- [x] **Block 1.5 — 真 ETF 持股** — issuer CSV → yfinance 前十大 → 舊快照 → seed 逐級降級;週更快照進版控;歸桶未決輸出「需人工補 refine」提醒。發行商 URL 待首跑驗證。
 - [x] **Block 2 — 雙透鏡** — BSM 自算 Greeks + IV 反解 + 實現波動 + percentile 自舉。純數學已測(對照教科書值)。
 - [x] **Block 2.5 — 真 T-bill 利率 + edge 閘基準改良** — `rates.py` 按天期挑 ^IRX/^FVX;edge 閘改「IV 自身歷史 percentile 優先、ratio 後備」;IV 自舉開始收樣本(append-only)。純邏輯已測,Colab 驗證待跑。
 - [x] **Block 3 — 路由器 + 造合約** — 論點時鐘路由(帶日期催化劑→凸性、無→槓桿)+ 條件式單腿 call 合約卡(`router.py`)。純邏輯已測,Colab 驗證待跑;T1 軟催化劑與 tier_map 待補。

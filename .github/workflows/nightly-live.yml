@@ -39,7 +39,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state/iv_history.jsonl state/tracer.jsonl state/bucket_map.jsonl RADAR.md
+          git add state/iv_history.jsonl state/tracer.jsonl state/bucket_map.jsonl state/universe.jsonl RADAR.md
           if git diff --cached --quiet; then
             echo "state/報告皆無變化,不 commit"
           else
