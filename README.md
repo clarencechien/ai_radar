@@ -1,5 +1,7 @@
 # AI Radar
 
+**📊 [最新掃描報告 → RADAR.md](./RADAR.md)**(每個台灣平日 22:00 自動更新;上半白話、下半技術細節)
+
 通用 AI 一籃子選擇權過濾器 — **via negativa**:不告訴你買什麼,只 filter 掉不能買/不要買的,存活者留給人判斷。對存活者算「若動手該買哪張 call」的條件式合約卡。
 
 > 家族:`optscnr` / `space_radar` / `delta_radar` / `tw_scanner` / `rainwalker`。

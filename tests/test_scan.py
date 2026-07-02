@@ -28,8 +28,9 @@ LEAPS = [{"strike": 150, "dte": 550, "mid": 62, "iv": 0.42, "oi": 1000, "volume"
 OTM = [{"strike": 1080, "dte": 40, "mid": 12.0, "iv": 0.55, "oi": 1000, "volume": 100,
         "expiry": "2026-08-14"}]
 
-SPOTS = {"NVDA": 200.0, "MU": 1000.0}
-EVENTS = {"MU": [{"date": "2026-08-01", "kind": "earnings"}]}   # T-30
+SPOTS = {"NVDA": 200.0, "MU": 1000.0, "FAR": 200.0}
+EVENTS = {"MU": [{"date": "2026-08-01", "kind": "earnings"}],    # T-30(lookahead 內)
+          "FAR": [{"date": "2026-09-23", "kind": "earnings"}]}   # T-83(超過 lookahead 60)
 
 
 def _fetch_spot(t):
@@ -45,15 +46,20 @@ def _fetch_chain(t, S, min_dte, max_dte, otm_only):
 def test_scan_universe_routes_degrades_and_reports():
     seen_chains = []
     recs = scan_universe(
-        [("NVDA", "加速器"), ("MU", "記憶體"), ("BAD", "設備")], CFG, today=TODAY,
+        [("NVDA", "加速器"), ("MU", "記憶體"), ("FAR", "設備"), ("BAD", "設備")],
+        CFG, today=TODAY,
         fetch_spot=_fetch_spot, fetch_chain=_fetch_chain,
         fetch_events=lambda t: EVENTS.get(t, []),
         fetch_rv=lambda t: 0.50, rate_for=lambda dte: 0.045,
         on_chain=lambda t, S, c: seen_chains.append(t))
 
-    assert [r["ticker"] for r in recs] == ["NVDA", "MU", "BAD"]   # 順序保留
+    assert [r["ticker"] for r in recs] == ["NVDA", "MU", "FAR", "BAD"]   # 順序保留
 
-    nvda, mu, bad = recs
+    nvda, mu, far, bad = recs
+    # FAR:財報 T-83 超過 lookahead 60 → 時鐘「現在沒在走」→ 槓桿(預設姿勢);
+    # 否則每檔永遠有下一次財報,凸性會吃掉整個宇宙、槓桿透鏡變死码。
+    assert far["route"] == "leverage" and far["verdict"] == "PASS"
+    assert far["catalyst"]["dte"] == 83 and far["catalyst"]["within_lookahead"] is False
     # NVDA 無時鐘 → 槓桿 → PASS
     assert nvda["route"] == "leverage" and nvda["verdict"] == "PASS"
     assert nvda["catalyst"] is None
@@ -66,11 +72,11 @@ def test_scan_universe_routes_degrades_and_reports():
     assert "ConnectionError" in bad["error"] and bad["card"] is None
 
     # IV 自舉回呼只在成功抓到 chain 時觸發
-    assert seen_chains == ["NVDA", "MU"]
+    assert seen_chains == ["NVDA", "MU", "FAR"]
 
     # 報告吃得下整批紀錄(含 FETCH_ERROR 行)
     md = render_report(recs, asof="2026-07-02T22:00")
-    assert "通過濾網 **2 檔**" in md and "NO_DATA(1)" in md
+    assert "通過濾網 **3 檔**" in md and "NO_DATA(1)" in md
     assert "抓取失敗" in md and "ConnectionError" in md
 
 

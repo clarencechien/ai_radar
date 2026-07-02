@@ -49,22 +49,27 @@ def fetch_universe_tickers():
     seed = _load_cfg_json("universe_seed.json")["tickers"]
     snaps = list(read_records(UNIVERSE_SNAP))
     last = snaps[-1] if snaps else None
-    if last and not is_stale(last.get("ts", ""), TODAY):
+    # 快照沿用條件:未過期「且」當時至少一個來源抓到 CSV 全量;
+    # top10 後備湊出來的縮水宇宙不沿用,每晚重試 CSV,直到 URL 修好為止。
+    if (last and not is_stale(last.get("ts", ""), TODAY)
+            and "csv" in (last.get("sources") or {}).values()):
         return last["tickers"], f"快照 {last['ts'][:10]}(週更未到期)"
 
     srcs = _load_cfg_json("etf_sources.json")
-    got = {}
+    got, how = {}, {}
     for etf in CFG["universe"]["etf_sources"]:
-        tickers = None
+        tickers, via = None, "fail"
         url = (srcs.get(etf) or {}).get("csv_url")
         if url:
             try:
                 tickers = parse_holdings_csv(live_yf.fetch_url_text(url)) or None
+                via = "csv" if tickers else via
             except Exception:
                 tickers = None
         if tickers is None:
             tickers = live_yf.fetch_etf_top_holdings(etf) or None
-        got[etf] = tickers
+            via = "top10" if tickers else via   # 後備只有前十大,宇宙會偏小
+        got[etf], how[etf] = tickers, via
 
     ok = {k: v for k, v in got.items() if v}
     if not ok:
@@ -78,9 +83,9 @@ def fetch_universe_tickers():
                        if t not in known and not live_yf.is_optionable(t))
     tickers = [t for t in tickers if t not in no_option]
     append_record(UNIVERSE_SNAP, {
-        "tickers": tickers, "dropped_no_option": no_option,
-        "sources": {k: ("ok" if v else "fail") for k, v in got.items()}})
-    return tickers, "ETF 持股(" + "、".join(sorted(ok)) + f";{len(tickers)} 檔)"
+        "tickers": tickers, "dropped_no_option": no_option, "sources": how})
+    detail = "、".join(f"{k}:{how[k]}" for k in sorted(got))
+    return tickers, f"ETF 持股({detail};{len(tickers)} 檔)"
 
 
 def resolve_universe():
