@@ -1,0 +1,2 @@
+{"ticker": "NVDA", "bucket": "加速器", "tier": null, "route": "leverage", "verdict": "NO_DATA", "code": "LIQ_NO_OI_DATA", "spot": 197.58, "metrics": null, "card": null, "asof": "2026-07-02T05:36", "kind": "scan", "ts": "2026-07-02T05:36:27+00:00"}
+{"ticker": "MU", "bucket": "記憶體", "tier": null, "route": "convexity", "verdict": "NO_DATA", "code": "LIQ_NO_OI_DATA", "spot": 1032.28, "metrics": null, "card": null, "asof": "2026-07-02T05:36", "kind": "scan", "ts": "2026-07-02T05:36:27+00:00"}

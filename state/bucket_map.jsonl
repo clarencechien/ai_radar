@@ -1,0 +1,23 @@
+{"ticker": "AMAT", "bucket": "設備", "source": "gics", "gics_sub": "Semiconductor Equipment & Materials", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "AMD", "bucket": "加速器", "source": "refine", "gics_sub": "Semiconductors", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "AMZN", "bucket": "賽馬", "source": "gics", "gics_sub": "Internet Retail", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "ASML", "bucket": "設備", "source": "gics", "gics_sub": "Semiconductor Equipment & Materials", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "AVGO", "bucket": "加速器", "source": "refine", "gics_sub": "Semiconductors", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "CEG", "bucket": "電力", "source": "gics", "gics_sub": "Utilities - Independent Power Producers", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "DRAM", "bucket": "ETF代理", "source": "refine", "gics_sub": null, "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "GEV", "bucket": "電力", "source": "refine", "gics_sub": "Specialty Industrial Machinery", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "GOOGL", "bucket": "賽馬", "source": "gics", "gics_sub": "Internet Content & Information", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "INTC", "bucket": "製造", "source": "refine", "gics_sub": "Semiconductors", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "KLAC", "bucket": "設備", "source": "gics", "gics_sub": "Semiconductor Equipment & Materials", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "LRCX", "bucket": "設備", "source": "gics", "gics_sub": "Semiconductor Equipment & Materials", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "META", "bucket": "賽馬", "source": "gics", "gics_sub": "Internet Content & Information", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "MRVL", "bucket": "加速器", "source": "refine", "gics_sub": "Semiconductors", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "MSFT", "bucket": "賽馬", "source": "gics", "gics_sub": "Software - Infrastructure", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "MU", "bucket": "記憶體", "source": "refine", "gics_sub": "Semiconductors", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "NVDA", "bucket": "加速器", "source": "refine", "gics_sub": "Semiconductors", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "ORCL", "bucket": "賽馬", "source": "gics", "gics_sub": "Software - Infrastructure", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "PLTR", "bucket": "賽馬", "source": "gics", "gics_sub": "Software - Infrastructure", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "SMH", "bucket": "ETF代理", "source": "refine", "gics_sub": null, "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "SOXX", "bucket": "ETF代理", "source": "refine", "gics_sub": null, "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "TSM", "bucket": "製造", "source": "refine", "gics_sub": "Semiconductors", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "VST", "bucket": "電力", "source": "gics", "gics_sub": "Utilities - Independent Power Producers", "ts": "2026-07-02T05:19:47+00:00"}
