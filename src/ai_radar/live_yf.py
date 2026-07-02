@@ -48,6 +48,30 @@ def fetch_events(t: str) -> list[dict]:
         return []
 
 
+def fetch_url_text(url: str, timeout: int = 30) -> str:
+    """抓發行商 CSV(有些站擋無 UA 的請求)。失敗丟例外,由呼叫端降級。"""
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", errors="replace")
+
+
+def fetch_etf_top_holdings(etf: str) -> list[str]:
+    """yfinance 後備:只有前十大持股,聊勝於無。失敗回 []。"""
+    try:
+        df = _yf().Ticker(etf).funds_data.top_holdings
+        return [str(s).upper() for s in df.index]
+    except Exception:
+        return []
+
+
+def is_optionable(t: str) -> bool:
+    try:
+        return len(_yf().Ticker(t).options) > 0
+    except Exception:
+        return False
+
+
 def fetch_yields() -> tuple:
     """(短率 ^IRX 13週, 長率 ^FVX 5年),年化小數;抓不到 → None(降級回預設)。"""
     out = []

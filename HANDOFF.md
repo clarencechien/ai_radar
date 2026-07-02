@@ -56,6 +56,7 @@ ai_radar/
     router.py                   Block 3 路由器(論點時鐘)+ 條件式合約卡
     report.py                   人看的 RADAR.md 報告渲染(nightly 自動生成於 root)
     scan.py                     正式進入點純邏輯:掃整個宇宙(fetcher 注入,單檔炸降級)
+    etf_holdings.py             Block 1.5 發行商 CSV 解析 + 快照時效(純邏輯)
     live_yf.py                  yfinance live 轉接層(延遲載入,離線 import 不炸)
     catalysts.py                Block 4 催化劑 helper(標時鐘,只呈現不裁決)
     tracer.py                   Block 5 shadow tracer(collect_only + T+N 回填 + 雙向報表)
@@ -116,7 +117,11 @@ ai_radar/
   - `rates.py`:^IRX(13週)/^FVX(5年)按合約天期挑,NO_DATA 降級回預設。
   - edge 閘改雙基準:IV 自身歷史 percentile 優先(`cvx_iv_pct_max`,不受實現波動失真影響)、歷史不足退用原 ratio 閘。verdict metrics 印 `edge_basis` 標明用了哪個基準。
   - 自舉開始收樣本:notebook 每跑一次(每 ticker 每天一筆)append ATM IV 到 `state/iv_history.jsonl`(`series_by_key` 讀回)。**注意 Colab 環境是暫時的,`state/` 要 commit 回 repo 或存 Drive,樣本才會累積。**
-- **Block 1.5**:接真 ETF 持股 CSV(發行商每日公布,免費;各家 URL 格式不一、會改版,是髒活)。同時處理「半導體粗桶 limbo」——不在 refine 的半導體個股會卡在粗桶「半導體」(非權重桶),要輸出「需人工補 refine」提醒清單。
+- ~~**Block 1.5**:接真 ETF 持股 CSV~~ **已完成(純邏輯已測,發行商 URL 待首跑驗證)**:
+  - `etf_holdings.py`:CSV 解析(容忍 iShares 式前導雜訊、各家欄名)、ticker 正規化(BRK.B→BRK-B、剔現金列)、快照週更時效。
+  - 抓取鏈逐級降級:issuer CSV(`config/etf_sources.json`,**URL 會改版是髒活,首跑看 RADAR.md 宇宙來源行確認哪個活著**)→ yfinance 前十大後備 → 前次快照(`state/universe.jsonl`,進版控)→ `universe_seed.json`。
+  - 新面孔才做 option 濾網(bucket_map 沒見過的),避免每晚重驗整個宇宙。
+  - 「半導體粗桶 limbo」/NO_DATA 歸桶 → RADAR.md Details「需人工處理」段輸出補 refine 提醒。
 - **賽馬 T1/T2 tier_map**:yfinance 分不出 PLTR(T2)vs MSFT/ORCL(T1,都是 "Software - Infrastructure")→ 需手動 tier_map(像 refine)。破壞線**按名不按桶**(賽馬賭哪匹馬贏,是個股特有的事)。
 - ~~**Block 3**:造合約 + **路由器**~~ **已完成(純邏輯已測,Colab 驗證待跑)**:`router.py`——`route()` 論點時鐘(帶日期催化劑→凸性、無/已過→槓桿)、`build_card()` 組 SPEC §6 合約卡(含損益兩平%、G0 bypass 誠實標記、條件式聲明)、`scan_one()` 單標的走完路由→透鏡→出卡,回傳格式即 tracer 要收的紀錄。**待補**:賽馬 T1 軟催化劑(`CVX_SOFT_CATALYST`,需破壞線基建)與 tier_map(見下)。
 - **chain 層級 NO_DATA(修正)**:Colab 真實觀察到 Yahoo 時段性整批缺 OI(同日同 spot,前跑過 OI 250 張、後跑 0 張)→ 空 chain 或全 chain OI=0 時透鏡回 `NO_DATA`(`NO_CONTRACTS` / `LIQ_NO_OI_DATA`)而非 EXCLUDE——資料缺失要降級,不是製造假淘汰(承 §6.2 教訓)。

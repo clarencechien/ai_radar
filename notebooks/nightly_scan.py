@@ -10,8 +10,10 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from ai_radar.universe import load_json, append_new_buckets  # noqa: E402
-from ai_radar.state import append_record, latest_by_key, series_by_key  # noqa: E402
+from ai_radar.universe import load_json, append_new_buckets, union_dedup  # noqa: E402
+from ai_radar.etf_holdings import parse_holdings_csv, is_stale  # noqa: E402
+from ai_radar.state import (  # noqa: E402
+    append_record, latest_by_key, read_records, series_by_key)
 from ai_radar.rates import resolve_rate  # noqa: E402
 from ai_radar.scan import scan_universe  # noqa: E402
 from ai_radar.router import format_card  # noqa: E402
@@ -27,6 +29,7 @@ STATE = os.path.join(ROOT, "state")
 IV_HISTORY = os.path.join(STATE, "iv_history.jsonl")
 TRACER = os.path.join(STATE, "tracer.jsonl")
 BUCKET_MAP = os.path.join(STATE, "bucket_map.jsonl")
+UNIVERSE_SNAP = os.path.join(STATE, "universe.jsonl")
 
 R_DEFAULT = CFG["data"].get("risk_free_rate_default", 0.045)
 R_CUTOFF = CFG["data"].get("rate_tenor_cutoff_days", 365)
@@ -37,9 +40,52 @@ def _load_cfg_json(name):
     return {k: v for k, v in d.items() if not k.startswith("_")}
 
 
-def resolve_universe():
-    """seed 清單 → append-only 歸桶(缺的用 yfinance industry 補)→ [(ticker, bucket)]。"""
+def fetch_universe_tickers():
+    """Block 1.5:真 ETF 持股,週更 + 逐級降級。回傳 (tickers, 來源說明)。
+
+    快照 ≤7 天 → 直接用;過期 → issuer CSV → yfinance 前十大 → 舊快照 → seed。
+    新面孔(bucket_map 沒見過)才做 option 濾網,避免每晚重驗整個宇宙。
+    """
     seed = _load_cfg_json("universe_seed.json")["tickers"]
+    snaps = list(read_records(UNIVERSE_SNAP))
+    last = snaps[-1] if snaps else None
+    if last and not is_stale(last.get("ts", ""), TODAY):
+        return last["tickers"], f"快照 {last['ts'][:10]}(週更未到期)"
+
+    srcs = _load_cfg_json("etf_sources.json")
+    got = {}
+    for etf in CFG["universe"]["etf_sources"]:
+        tickers = None
+        url = (srcs.get(etf) or {}).get("csv_url")
+        if url:
+            try:
+                tickers = parse_holdings_csv(live_yf.fetch_url_text(url)) or None
+            except Exception:
+                tickers = None
+        if tickers is None:
+            tickers = live_yf.fetch_etf_top_holdings(etf) or None
+        got[etf] = tickers
+
+    ok = {k: v for k, v in got.items() if v}
+    if not ok:
+        if last:
+            return last["tickers"], f"舊快照 {last['ts'][:10]}(ETF 來源全掛)"
+        return seed, "seed 後備(ETF 來源全掛且無快照)"
+
+    tickers = union_dedup(ok)
+    known = set(latest_by_key(BUCKET_MAP))
+    no_option = sorted(t for t in tickers
+                       if t not in known and not live_yf.is_optionable(t))
+    tickers = [t for t in tickers if t not in no_option]
+    append_record(UNIVERSE_SNAP, {
+        "tickers": tickers, "dropped_no_option": no_option,
+        "sources": {k: ("ok" if v else "fail") for k, v in got.items()}})
+    return tickers, "ETF 持股(" + "、".join(sorted(ok)) + f";{len(tickers)} 檔)"
+
+
+def resolve_universe():
+    """宇宙 → append-only 歸桶(缺的用 yfinance industry 補)→ [(ticker, bucket)]。"""
+    tickers, src_note = fetch_universe_tickers()
     gics_map, refine = _load_cfg_json("gics_map.json"), _load_cfg_json("refine.json")
 
     def gics_lookup(t):
@@ -48,10 +94,10 @@ def resolve_universe():
         except Exception:
             return None
 
-    append_new_buckets(seed, gics_lookup, gics_map, refine, BUCKET_MAP)
+    append_new_buckets(tickers, gics_lookup, gics_map, refine, BUCKET_MAP)
     bmap = latest_by_key(BUCKET_MAP)
-    uni = [(t, bmap.get(t, {}).get("bucket", "NO_DATA")) for t in seed]
-    return [(t, b) for t, b in uni if b != "ETF代理"]
+    uni = [(t, bmap.get(t, {}).get("bucket", "NO_DATA")) for t in tickers]
+    return [(t, b) for t, b in uni if b != "ETF代理"], src_note
 
 
 def record_atm_iv(t, S, chain):
@@ -72,9 +118,9 @@ if __name__ == "__main__":
     def rate_for(dte):
         return resolve_rate(dte or 90, r_short, r_long, R_DEFAULT, R_CUTOFF)
 
-    universe = resolve_universe()
+    universe, src_note = resolve_universe()
     fmt = lambda x: f"{x:.3%}" if x is not None else "NO_DATA"  # noqa: E731
-    print(f"AI Radar nightly scan · {asof} · 宇宙 {len(universe)} 檔")
+    print(f"AI Radar nightly scan · {asof} · 宇宙 {len(universe)} 檔 · 來源:{src_note}")
     print(f"無風險利率:短 {fmt(r_short)} / 長 {fmt(r_long)}(缺→{R_DEFAULT:.2%})")
 
     iv_hist = series_by_key(IV_HISTORY)
@@ -114,13 +160,16 @@ if __name__ == "__main__":
         filled += 1
     rep = report(TRACER, CFG["tracer"]["min_samples"])
 
-    # 人看的報告
+    # 人看的報告(上半白話、下半 Details)
     after_iv = series_by_key(IV_HISTORY)
+    limbo = sorted(t for t, b in universe if b in ("NO_DATA", "半導體"))
+    attention = ([f"歸桶未決(粗桶/NO_DATA),請補 config/refine.json:{'、'.join(limbo)}"]
+                 if limbo else None)
     md = render_report(recs, asof=asof, r_short=r_short, r_long=r_long,
                        r_default=R_DEFAULT,
                        iv_counts={t: len(v) for t, v in after_iv.items()},
                        ivp_min=CFG["data"]["iv_percentile_min_history_days"],
-                       tracer_report=rep)
+                       tracer_report=rep, universe_note=src_note, attention=attention)
     with open(os.path.join(ROOT, "RADAR.md"), "w", encoding="utf-8") as f:
         f.write(md)
 
