@@ -52,6 +52,8 @@ ai_radar/
     bsm.py                      Block 2 BSM Greeks + IV 反解
     volatility.py               Block 2 實現波動 + IV percentile 自舉
     lenses.py                   Block 2 雙透鏡
+    rates.py                    Block 2.5 T-bill 利率(按天期挑,NO_DATA 降級)
+    router.py                   Block 3 路由器(論點時鐘)+ 條件式合約卡
   notebooks/
     colab_verify_block1.py      Block 1 live 驗證(需 Colab)
     colab_verify_block2.py      Block 2 live 驗證(需 Colab,含診斷)
@@ -59,6 +61,8 @@ ai_radar/
     test_universe.py            Block 1 純邏輯
     test_universe_real.py       用真實 industry 字串鎖住 23 檔歸桶
     test_bsm_lenses.py          Block 2 數學 + 透鏡
+    test_rates.py               Block 2.5 利率 + IV 序列
+    test_router.py              Block 3 路由 + 合約卡 + chain 層級 NO_DATA
   .github/workflows/test.yml    CI 只跑純邏輯測試(不碰 live)
 ```
 
@@ -105,7 +109,8 @@ ai_radar/
   - 自舉開始收樣本:notebook 每跑一次(每 ticker 每天一筆)append ATM IV 到 `state/iv_history.jsonl`(`series_by_key` 讀回)。**注意 Colab 環境是暫時的,`state/` 要 commit 回 repo 或存 Drive,樣本才會累積。**
 - **Block 1.5**:接真 ETF 持股 CSV(發行商每日公布,免費;各家 URL 格式不一、會改版,是髒活)。同時處理「半導體粗桶 limbo」——不在 refine 的半導體個股會卡在粗桶「半導體」(非權重桶),要輸出「需人工補 refine」提醒清單。
 - **賽馬 T1/T2 tier_map**:yfinance 分不出 PLTR(T2)vs MSFT/ORCL(T1,都是 "Software - Infrastructure")→ 需手動 tier_map(像 refine)。破壞線**按名不按桶**(賽馬賭哪匹馬贏,是個股特有的事)。
-- **Block 3**:造合約 + **路由器**。路由靠**論點時鐘**:某檔現在有沒有帶日期的催化劑(財報/合約報價/發表)→ 有進凸性透鏡、沒有進槓桿透鏡。把兩透鏡輸出組裝成 spec §7 那張條件式合約卡。
+- ~~**Block 3**:造合約 + **路由器**~~ **已完成(純邏輯已測,Colab 驗證待跑)**:`router.py`——`route()` 論點時鐘(帶日期催化劑→凸性、無/已過→槓桿)、`build_card()` 組 SPEC §6 合約卡(含損益兩平%、G0 bypass 誠實標記、條件式聲明)、`scan_one()` 單標的走完路由→透鏡→出卡,回傳格式即 tracer 要收的紀錄。**待補**:賽馬 T1 軟催化劑(`CVX_SOFT_CATALYST`,需破壞線基建)與 tier_map(見下)。
+- **chain 層級 NO_DATA(修正)**:Colab 真實觀察到 Yahoo 時段性整批缺 OI(同日同 spot,前跑過 OI 250 張、後跑 0 張)→ 空 chain 或全 chain OI=0 時透鏡回 `NO_DATA`(`NO_CONTRACTS` / `LIQ_NO_OI_DATA`)而非 EXCLUDE——資料缺失要降級,不是製造假淘汰(承 §6.2 教訓)。
 - **Block 4**:催化劑 helper(財報/事件日,只呈現不裁決;餵路由器 + 餵人看 T-N 天)。
 - **Block 5**:shadow tracer(先 collect_only,回填 T+5/10/20,雙向檢查存活者放對沒/被排除者砍錯沒;min_samples 30 且人工週審後才**建議**調參,不自動改 config)。
 - **G0 曝險護欄**(客製化,最後做):台積個人總曝險(工作+新台幣資產+部位)超上限就擋;一旦開就常開。put/對沖左尾另議,不在只-call 範圍。

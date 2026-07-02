@@ -36,10 +36,29 @@ def _valid_contract(c) -> bool:
     return (c.get("iv") or 0) > 0 and (c.get("mid") or 0) > 0 and (c.get("dte") or 0) > 0
 
 
+def _chain_no_data(contracts, lens_name):
+    """chain 層級的資料缺失偵測 → NO_DATA verdict(非 EXCLUDE)。
+
+    - 空 chain:多半是 bid/ask 全空(收盤後)連合約都建不出來。
+    - 整條 chain 的 OI 都缺/為 0:Yahoo 時段性整批缺 OI(真實觀察:同一天同一
+      spot,前一次過 OI 250 張、下一次 0 張)。這是資料缺失,照「降級只在資料
+      缺失時觸發」的原則不該被當成真淘汰。
+    """
+    if not contracts:
+        return {"lens": lens_name, "verdict": "NO_DATA", "code": "NO_CONTRACTS"}
+    if all((c.get("oi") or 0) <= 0 for c in contracts):
+        return {"lens": lens_name, "verdict": "NO_DATA", "code": "LIQ_NO_OI_DATA"}
+    return None
+
+
 def leverage_lens(contracts, S, r, cfg, iv_history=None):
     """槓桿透鏡:DTE>門檻、delta∈區間、選每單位 delta 時間價值最低。"""
     lev, liq = cfg["leverage"], cfg["liquidity"]
     ivp_min = cfg["data"]["iv_percentile_min_history_days"]
+
+    nd = _chain_no_data(contracts, "leverage")
+    if nd:
+        return nd
 
     cands = []
     for c in contracts:
@@ -93,6 +112,10 @@ def convexity_lens(contracts, S, r, realized_vol_val, catalyst_dte, cfg, tier=No
 
     if catalyst_dte is None:
         return {"lens": "convexity", "verdict": "SKIP", "code": "NO_CATALYST"}
+
+    nd = _chain_no_data(contracts, "convexity")
+    if nd:
+        return nd
 
     cands = []
     for c in contracts:
