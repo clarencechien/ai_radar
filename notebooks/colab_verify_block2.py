@@ -76,6 +76,7 @@ def build_contracts(t, S, min_dte, max_dte, otm_only=False):
             if iv is None:
                 continue
             out.append({"strike": float(K), "dte": d, "mid": float(mid), "iv": iv,
+                        "bid": float(bid or 0), "ask": float(ask or 0),
                         "oi": _safe_int(row.get("openInterest")),
                         "volume": _safe_int(row.get("volume")), "expiry": exp})
     return out
@@ -114,11 +115,16 @@ if __name__ == "__main__":
     S = spot("MU")
     cat_dte = next_earnings_dte("MU")
     rv = realized_20d("MU")
-    print(f"spot={S:.2f}  財報 T-{cat_dte}  20d 實現波動={rv:.3f}" if cat_dte
-          else f"spot={S:.2f}  查無財報日")
-    if cat_dte:
+    rv_txt = f"{rv:.3f}" if rv is not None else "NO_DATA"
+    if cat_dte is not None and cat_dte >= 0:
+        print(f"spot={S:.2f}  財報 T-{cat_dte}  20d 實現波動={rv_txt}")
+    else:
+        print(f"spot={S:.2f}  查無(未來)財報日  20d 實現波動={rv_txt}")
+        cat_dte = None
+    if cat_dte is not None:
         chain = build_contracts("MU", S, max(cat_dte, 1), cat_dte + 60, otm_only=True)
-        out = convexity_lens(chain, S, R, rv, cat_dte, CFG, tier="T1")
+        # MU 是記憶體桶(收費員),不是賽馬 → 不帶 tier,走基準 edge 閘
+        out = convexity_lens(chain, S, R, rv, cat_dte, CFG)
         print("verdict:", out["verdict"], out.get("code") or "")
         if out["verdict"] == "PASS":
             c = out["contract"]

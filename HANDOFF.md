@@ -76,6 +76,9 @@ ai_radar/
 4. **流動性閘 OI 優先**:LEAPS 日成交量本就低、收盤後 volume=0。改為 **OI 硬門檻、volume 只在 >0 時才生效**(否則靠 OI)。
 5. **NaN→int 崩潰**:`int(x or 0)` 對 pandas 的 NaN 無效(NaN 是 truthy)→ 用 `_safe_int()`。
 6. **利率 r 仍固定 0.045**:長天期 LEAPS 的 delta/定價受利率影響,待接真實 T-bill(Block 2.5)。
+7. **tier 預設值修正**:`convexity_lens` 原預設 `tier="T1"`,讓非賽馬桶(如記憶體 MU)誤吃賽馬 T1 的嚴閘(1.1)。SPEC 明定 T1/T2 閘是賽馬子層專屬 → 預設改 `None`(走基準閘 1.3),只有賽馬桶才傳 tier。
+8. **價差閘補實作**:`max_spread_pct` 原本設在 config 但沒人執行。現於 `_passes_liquidity` 實作:**僅在 bid/ask 雙邊報價都存在時才生效**(收盤後報價空 → 跳過,靠 OI),與 OI 優先原則一致。notebook 的 `build_contracts` 已把 bid/ask 傳進合約 dict。
+9. **髒合約降級**:iv/mid/dte 缺失或非正的合約直接跳過(`_valid_contract`),不讓 BSM 拋 ValueError 崩潰整個透鏡(承 §2.6 NO_DATA 原則)。
 
 ## 7. config 現值與含意 (`config/config.json`)
 

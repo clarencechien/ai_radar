@@ -137,3 +137,47 @@ def test_convexity_lens_no_catalyst_skips():
     out = convexity_lens([_mk(110, 40, 1.0, 0.5)], 100, 0.045,
                          realized_vol_val=0.4, catalyst_dte=None, cfg=CFG)
     assert out["verdict"] == "SKIP" and out["code"] == "NO_CATALYST"
+
+
+def test_convexity_lens_default_tier_uses_base_gate():
+    """tier 是賽馬桶專屬:不帶 tier(如記憶體桶 MU)應走基準閘 1.3,
+    而不是被賽馬 T1 的 1.1 誤擋。鎖住 tier 預設值修正。"""
+    S, r = 100, 0.045
+    chain = [_mk(110, 40, 1.0, 0.60)]   # ratio = 0.60/0.50 = 1.2:T1 擋、基準放行
+    out_base = convexity_lens(chain, S, r, realized_vol_val=0.50,
+                              catalyst_dte=30, cfg=CFG)
+    assert out_base["verdict"] == "PASS", out_base
+    out_t1 = convexity_lens(chain, S, r, realized_vol_val=0.50,
+                            catalyst_dte=30, cfg=CFG, tier="T1")
+    assert out_t1["verdict"] == "EXCLUDE" and out_t1["code"] == "CVX_IV_PRICED"
+
+
+def test_spread_gate_enforced_when_quotes_present():
+    """max_spread_pct:有雙邊報價才生效;bid/ask 缺(收盤後)不因此淘汰。"""
+    S, r = 200, 0.045
+    wide = _mk(180, 550, 40, 0.40)
+    wide.update({"bid": 34.0, "ask": 46.0})       # spread 30% > 10% → 擋
+    out = leverage_lens([wide], S, r, CFG)
+    assert out["verdict"] == "EXCLUDE" and out["code"] == "LEV_NO_DELTA"
+
+    tight = _mk(180, 550, 40, 0.40)
+    tight.update({"bid": 39.0, "ask": 41.0})      # spread 5% → 放行
+    assert leverage_lens([tight], S, r, CFG)["verdict"] == "PASS"
+
+    no_quote = _mk(180, 550, 40, 0.40)            # 無 bid/ask → 靠 OI,放行
+    assert leverage_lens([no_quote], S, r, CFG)["verdict"] == "PASS"
+
+
+def test_lenses_degrade_on_bad_contract_no_crash():
+    """NO_DATA 降級:iv/mid 缺失或非正的髒合約應被跳過,不讓 BSM 拋例外。"""
+    S, r = 200, 0.045
+    dirty = [_mk(180, 550, 40, 0.0),              # iv=0 → BSM 會炸的輸入
+             _mk(180, 550, 40, None),             # iv 缺失
+             _mk(180, 550, 0.0, 0.40)]            # mid=0
+    out = leverage_lens(dirty, S, r, CFG)
+    assert out["verdict"] == "EXCLUDE" and out["code"] == "LEV_NO_DELTA"
+
+    dirty_otm = [_mk(112, 40, 1.2, None), _mk(112, 40, 0.0, 0.55)]
+    out2 = convexity_lens(dirty_otm, 100, r, realized_vol_val=0.5,
+                          catalyst_dte=30, cfg=CFG)
+    assert out2["verdict"] == "EXCLUDE" and out2["code"] == "CVX_NO_STRIKE"

@@ -22,7 +22,18 @@ def _passes_liquidity(c, liq) -> bool:
     vol = c.get("volume", 0) or 0
     if vol > 0 and vol < liq["min_vol"]:
         return False
+    # 價差閘僅在「有雙邊報價」時才生效;收盤後 bid/ask 空 → 跳過,靠 OI
+    bid, ask = c.get("bid", 0) or 0, c.get("ask", 0) or 0
+    if bid > 0 and ask > 0:
+        mid = (bid + ask) / 2.0
+        if (ask - bid) / mid * 100.0 > liq["max_spread_pct"]:
+            return False
     return True
+
+
+def _valid_contract(c) -> bool:
+    # NO_DATA 降級:iv/mid/dte 缺失或非正 → 跳過該張,不讓 BSM 拋例外崩潰
+    return (c.get("iv") or 0) > 0 and (c.get("mid") or 0) > 0 and (c.get("dte") or 0) > 0
 
 
 def leverage_lens(contracts, S, r, cfg, iv_history=None):
@@ -32,6 +43,8 @@ def leverage_lens(contracts, S, r, cfg, iv_history=None):
 
     cands = []
     for c in contracts:
+        if not _valid_contract(c):
+            continue
         if c["dte"] < lev["lev_dte_min"] or not _passes_liquidity(c, liq):
             continue
         T = c["dte"] / YEAR
@@ -62,8 +75,11 @@ def leverage_lens(contracts, S, r, cfg, iv_history=None):
     }
 
 
-def convexity_lens(contracts, S, r, realized_vol_val, catalyst_dte, cfg, tier="T1"):
-    """凸性透鏡:帶日期催化劑、便宜價外、過 IV÷實現波動 edge 閘、選 max gamma/權利金。"""
+def convexity_lens(contracts, S, r, realized_vol_val, catalyst_dte, cfg, tier=None):
+    """凸性透鏡:帶日期催化劑、便宜價外、過 IV÷實現波動 edge 閘、選 max gamma/權利金。
+
+    tier 只給賽馬桶用(T1/T2 各有自己的 edge 閘);其他桶傳 None 走基準閘。
+    """
     cvx, liq = cfg["convexity"], cfg["liquidity"]
     ratio_max = cvx.get("racehorse_tiers", {}).get(tier, {}).get(
         "cvx_iv_ratio_max", cvx["cvx_iv_ratio_max"])
@@ -73,7 +89,7 @@ def convexity_lens(contracts, S, r, realized_vol_val, catalyst_dte, cfg, tier="T
 
     cands = []
     for c in contracts:
-        if not _passes_liquidity(c, liq):
+        if not _valid_contract(c) or not _passes_liquidity(c, liq):
             continue
         if c["strike"] <= S:                       # 只價外
             continue
