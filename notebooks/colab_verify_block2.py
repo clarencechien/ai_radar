@@ -4,6 +4,7 @@
 # 重點:不信 yfinance 的 IV,用我們的 implied_vol 從 mid 價自算。
 # =====================================================================
 import datetime as dt
+import math
 import os
 import sys
 
@@ -18,6 +19,16 @@ from ai_radar.lenses import leverage_lens, convexity_lens  # noqa: E402
 CFG = load_json(os.path.join(os.path.dirname(__file__), "..", "config", "config.json"))
 R = 0.045          # 無風險利率(之後可接 T-bill;先固定)
 TODAY = dt.date.today()
+
+
+def _safe_int(x):
+    """pandas 缺值是 NaN(float 且 truthy),int(NaN) 會炸 → 一律歸 0。"""
+    try:
+        if x is None or (isinstance(x, float) and math.isnan(x)):
+            return 0
+        return int(x)
+    except (ValueError, TypeError):
+        return 0
 
 
 def spot(t):
@@ -65,8 +76,8 @@ def build_contracts(t, S, min_dte, max_dte, otm_only=False):
             if iv is None:
                 continue
             out.append({"strike": float(K), "dte": d, "mid": float(mid), "iv": iv,
-                        "oi": int(row.get("openInterest") or 0),
-                        "volume": int(row.get("volume") or 0), "expiry": exp})
+                        "oi": _safe_int(row.get("openInterest")),
+                        "volume": _safe_int(row.get("volume")), "expiry": exp})
     return out
 
 
@@ -76,6 +87,21 @@ if __name__ == "__main__":
     S = spot("NVDA")
     chain = build_contracts("NVDA", S, 365, 900)
     print(f"spot={S:.2f}  合格 LEAPS 合約 {len(chain)} 張")
+
+    # 診斷:逐關淘汰數,讓 EXCLUDE 不再是黑盒
+    liq = CFG["liquidity"]
+    pass_oi = [c for c in chain if c["oi"] >= liq["min_oi"]]
+    deltas = []
+    for c in pass_oi:
+        g = bsm.greeks(S, c["strike"], c["dte"] / 365.0, R, c["iv"])
+        deltas.append(g["delta"])
+    in_band = [d for d in deltas
+               if CFG["leverage"]["lev_delta_lo"] <= d <= CFG["leverage"]["lev_delta_hi"]]
+    print(f"  診斷:過 OI({liq['min_oi']}) {len(pass_oi)} 張 | "
+          f"其中 delta∈[{CFG['leverage']['lev_delta_lo']},{CFG['leverage']['lev_delta_hi']}] {len(in_band)} 張")
+    if deltas:
+        print(f"  delta 範圍 {min(deltas):.2f}–{max(deltas):.2f}")
+
     out = leverage_lens(chain, S, R, CFG)
     print("verdict:", out["verdict"], out.get("code") or "")
     if out["verdict"] == "PASS":

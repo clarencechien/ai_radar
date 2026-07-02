@@ -3,7 +3,7 @@
 通用 AI 一籃子選擇權過濾器 — **via negativa**:不告訴你買什麼,只 filter 掉不能買/不要買的,存活者留給人判斷。對存活者算「若動手該買哪張 call」的條件式合約卡。
 
 > 家族:`optscnr` / `space_radar` / `delta_radar` / `tw_scanner` / `rainwalker`。
-> 完整設計見 [`SPEC.md`](./SPEC.md)(v0.4)。
+> 完整設計見 [`SPEC.md`](./SPEC.md)。**接手開發先讀 [`HANDOFF.md`](./HANDOFF.md)。**
 
 ## 核心原則
 - **scanner 中性**:對所有標的同規則,個人判斷只住 `Gate 0`(曝險護欄,目前延後)。
