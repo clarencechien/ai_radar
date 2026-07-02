@@ -18,8 +18,8 @@
 - [x] **Block 2 — 雙透鏡** — BSM 自算 Greeks + IV 反解 + 實現波動 + percentile 自舉。純數學已測(對照教科書值)。
 - [x] **Block 2.5 — 真 T-bill 利率 + edge 閘基準改良** — `rates.py` 按天期挑 ^IRX/^FVX;edge 閘改「IV 自身歷史 percentile 優先、ratio 後備」;IV 自舉開始收樣本(append-only)。純邏輯已測,Colab 驗證待跑。
 - [x] **Block 3 — 路由器 + 造合約** — 論點時鐘路由(帶日期催化劑→凸性、無→槓桿)+ 條件式單腿 call 合約卡(`router.py`)。純邏輯已測,Colab 驗證待跑;T1 軟催化劑與 tier_map 待補。
-- [ ] Block 4 — 催化劑 helper。
-- [ ] Block 5 — shadow tracer(先 collect_only)。
+- [x] **Block 4 — 催化劑 helper** — `catalysts.py` 標時鐘(最近未來事件 → T-N),只呈現不裁決;遠期事件標注不砍。
+- [x] **Block 5 — shadow tracer** — `tracer.py` collect_only:收掃描紀錄 → T+5/10/20 到期回填 → 雙向報表(存活者放對沒/被排除者砍錯沒)。閾值凍結,min_samples 30 前不解鎖,解鎖後也人工拍板。
 
 ## 沙盒 vs Colab 分工
 純邏輯(聯集、歸桶、append-only)在任何環境可跑並有測試。

@@ -19,6 +19,8 @@ from ai_radar.state import append_record, latest_by_key, series_by_key  # noqa: 
 from ai_radar.lenses import (  # noqa: E402
     leverage_lens, convexity_lens, _passes_liquidity, _valid_contract)
 from ai_radar.router import scan_one, format_card  # noqa: E402
+from ai_radar.catalysts import next_catalyst, format_clock  # noqa: E402
+from ai_radar.tracer import record_scan, record_outcome, due_backfills, report  # noqa: E402
 
 CFG = load_json(os.path.join(os.path.dirname(__file__), "..", "config", "config.json"))
 TODAY = dt.date.today()
@@ -76,16 +78,15 @@ def realized_20d(t):
     return realized_vol(px, window=CFG["data"]["realized_vol_window_days"])
 
 
-def next_earnings_dte(t):
+def fetch_earnings_events(t):
+    """yfinance calendar → 事件清單(餵催化劑 helper);抓不到 → [](NO_DATA)。"""
     try:
         cal = yf.Ticker(t).calendar
         ed = cal.get("Earnings Date")
-        d = ed[0] if isinstance(ed, list) else ed
-        if isinstance(d, dt.datetime):
-            d = d.date()
-        return (d - TODAY).days
+        ds = ed if isinstance(ed, list) else [ed]
+        return [{"date": d, "kind": "earnings"} for d in ds if d is not None]
     except Exception:
-        return None
+        return []
 
 
 def build_contracts(t, S, min_dte, max_dte, otm_only=False):
@@ -156,18 +157,16 @@ if __name__ == "__main__":
         print(f"     {out['metrics']}")
     nvda_S, nvda_r, nvda_chain = S, R, chain
 
-    # --- 凸性透鏡:MU,催化劑=下次財報 ---
+    # --- 凸性透鏡:MU,催化劑=下次財報(Block 4 helper 標時鐘,只呈現不裁決)---
     print("\n=== 凸性透鏡 · MU(催化劑=財報)===")
     S = spot("MU")
-    cat_dte = next_earnings_dte("MU")
+    mu_cat = next_catalyst(fetch_earnings_events("MU"), TODAY,
+                           lookahead_days=CFG["catalyst"]["lookahead_days"])
+    cat_dte = mu_cat["dte"] if mu_cat else None
     R = rf(cat_dte or 90)   # 財報窗在 cutoff 之下 → 短率
     rv = realized_20d("MU")
     rv_txt = f"{rv:.3f}" if rv is not None else "NO_DATA"
-    if cat_dte is not None and cat_dte >= 0:
-        print(f"spot={S:.2f}  財報 T-{cat_dte}  20d 實現波動={rv_txt}")
-    else:
-        print(f"spot={S:.2f}  查無(未來)財報日  20d 實現波動={rv_txt}")
-        cat_dte = None
+    print(f"spot={S:.2f}  {format_clock(mu_cat)}  20d 實現波動={rv_txt}")
     if cat_dte is not None:
         chain = build_contracts("MU", S, max(cat_dte, 1), cat_dte + 60, otm_only=True)
         record_atm_iv("MU", S, chain)
@@ -222,7 +221,30 @@ if __name__ == "__main__":
             if rec["code"] == "LIQ_NO_OI_DATA":
                 print("  ↳ Yahoo 這個時段 OI 整批缺 → 資料缺失非真淘汰,美股盤中重跑")
 
+    # --- Block 5:shadow tracer(collect_only:收掃描 → 回填到期的 T+N → 報表)---
+    print("\n=== Block 5 · shadow tracer(collect_only)===")
+    TRACER = os.path.join(STATE_DIR, "tracer.jsonl")
+    for rec in recs:
+        record_scan(TRACER, rec)
+    due = due_backfills(TRACER, TODAY, CFG["tracer"]["horizons_days"])
+    filled = 0
+    for d in due:
+        try:
+            now_px = spot(d["ticker"])
+        except Exception:
+            continue   # 抓不到現價 → 留著下次再回填(NO_DATA 降級)
+        record_outcome(TRACER, d["ticker"], d["scan_ts"], d["horizon_days"],
+                       d["spot_then"], now_px, option_mid_then=d["option_mid_then"])
+        filled += 1
+    rep = report(TRACER, CFG["tracer"]["min_samples"])
+    print(f"本次收 {len(recs)} 筆掃描;到期回填 {filled}/{len(due)};"
+          f"累計 outcome {rep['outcome_count']}(調參解鎖需 ≥{rep['min_samples']},"
+          f"目前 {rep['tuning_unlocked']})")
+    for k, hs in rep["by_verdict"].items():
+        print(f"  {k}: {hs}")
+
     after = series_by_key(IV_HISTORY)
     print(f"\nIV 自舉:跑完累計 NVDA {len(after.get('NVDA', []))} / MU {len(after.get('MU', []))} 筆"
-          f" → 記得把 state/iv_history.jsonl commit 回 repo,樣本才會跨 session 累積")
+          f" → 記得把 state/iv_history.jsonl + state/tracer.jsonl commit 回 repo,"
+          f"樣本才會跨 session 累積")
     print("注意:IV 全由 implied_vol 從 mid 自算;若合約數為 0,多半是 bid/ask 為空(收盤後)。")
