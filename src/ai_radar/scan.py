@@ -27,7 +27,10 @@ def scan_universe(universe, cfg, *, today, fetch_spot, fetch_chain, fetch_events
         try:
             S = fetch_spot(ticker)
             cat = next_catalyst(fetch_events(ticker), today, lookahead)
-            cat_dte = cat["dte"] if cat else None
+            # 每家公司永遠有「下一次財報」——時鐘超過 lookahead 視為「現在沒在走」,
+            # 本輪走槓桿(預設姿勢);時鐘仍附在紀錄上給人看(遠期)。
+            cat_dte = (cat["dte"] if cat and cat.get("within_lookahead", True)
+                       else None)
             if route(cat_dte) == "convexity":
                 chain = fetch_chain(ticker, S, max(cat_dte, 1), cat_dte + 60, True)
                 rv, r = fetch_rv(ticker), rate_for(cat_dte)
