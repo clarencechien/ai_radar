@@ -1,0 +1,49 @@
+name: nightly-live-scan
+
+# 台灣 22:00 平日夜跑 live 掃描(cron 用 UTC:14:00 UTC = 台灣 22:00)。
+# 美股夏令(3–11月)14:00 UTC = 美東 10:00 盤中 ✓
+# 冬令(11–3月)14:00 UTC = 美東 09:00 開盤前 → 屆時改 "0 15 * * 1-5"(台灣 23:00)。
+# schedule 只認 main 上的 workflow 檔;合進 main 前可用 workflow_dispatch 手動跑。
+on:
+  schedule:
+    - cron: "0 14 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 跑完要把 state 樣本 commit 回 main
+
+concurrency:
+  group: nightly-live
+  cancel-in-progress: false
+
+jobs:
+  live-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      - name: 離線回歸(邏輯先綠燈,再碰 live)
+        run: python -m pytest tests/ -q
+
+      - name: live 掃描(yfinance;缺資料 NO_DATA 降級)
+        run: python notebooks/colab_verify_block2.py
+
+      - name: commit state 樣本(IV 自舉 + tracer)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/iv_history.jsonl state/tracer.jsonl
+          if git diff --cached --quiet; then
+            echo "state 無新樣本(同日已收或 live 全 NO_DATA),不 commit"
+          else
+            git commit -m "state: nightly live scan samples ($(date -u +%F))"
+            git pull --rebase origin main
+            git push origin main
+          fi

@@ -66,7 +66,8 @@ ai_radar/
     test_rates.py               Block 2.5 利率 + IV 序列
     test_router.py              Block 3 路由 + 合約卡 + chain 層級 NO_DATA
     test_catalysts_tracer.py    Block 4 時鐘 + Block 5 收集/回填/報表
-  .github/workflows/test.yml    CI 只跑純邏輯測試(不碰 live)
+  .github/workflows/test.yml    CI 純邏輯+合成 e2e 回歸(push/PR/手動)
+  .github/workflows/nightly-live.yml  台灣 22:00 平日夜跑 live 掃描,state 樣本自動 commit 回 main(冬令要改 cron,見檔內註解)
 ```
 
 ## 5. 沙盒 vs Colab 分工(關鍵約束)

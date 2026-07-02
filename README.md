@@ -34,7 +34,16 @@ python -m pytest tests/ -v
 
 # Block 1 live 驗證(需 Colab / 本地,能連 Yahoo)
 python notebooks/colab_verify_block1.py
+
+# Block 2–5 live 驗證(同上;或由 nightly-live Action 自動跑)
+python notebooks/colab_verify_block2.py
 ```
+
+## 自動化
+- `tests`(push/PR/手動):純邏輯 + 合成資料端到端回歸,不碰網路。
+- `nightly-live`(台灣平日 22:00,美股夏令盤中;可手動觸發):跑 live 掃描,
+  把 `state/iv_history.jsonl`(IV 自舉)與 `state/tracer.jsonl`(tracer 樣本)
+  自動 commit 回 main——自舉與雙向檢查靠這個累積。冬令要把 cron 改 15:00 UTC。
 
 `colab_verify_block1.py` 會:
 1. dump 每檔 yfinance `industry` 字串 → 校準 `config/gics_map.json`
