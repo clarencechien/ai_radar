@@ -4,5 +4,6 @@ __pycache__/
 .ipynb_checkpoints/
 # state 是 append-only 資料,預設不進版控(可依需求改)
 state/*.jsonl
-# 例外:IV percentile 自舉樣本要跨 Colab session 累積,進版控
+# 例外:自舉樣本與 tracer 紀錄要跨 Colab session 累積,進版控
 !state/iv_history.jsonl
+!state/tracer.jsonl

@@ -54,6 +54,8 @@ ai_radar/
     lenses.py                   Block 2 雙透鏡
     rates.py                    Block 2.5 T-bill 利率(按天期挑,NO_DATA 降級)
     router.py                   Block 3 路由器(論點時鐘)+ 條件式合約卡
+    catalysts.py                Block 4 催化劑 helper(標時鐘,只呈現不裁決)
+    tracer.py                   Block 5 shadow tracer(collect_only + T+N 回填 + 雙向報表)
   notebooks/
     colab_verify_block1.py      Block 1 live 驗證(需 Colab)
     colab_verify_block2.py      Block 2 live 驗證(需 Colab,含診斷)
@@ -63,6 +65,7 @@ ai_radar/
     test_bsm_lenses.py          Block 2 數學 + 透鏡
     test_rates.py               Block 2.5 利率 + IV 序列
     test_router.py              Block 3 路由 + 合約卡 + chain 層級 NO_DATA
+    test_catalysts_tracer.py    Block 4 時鐘 + Block 5 收集/回填/報表
   .github/workflows/test.yml    CI 只跑純邏輯測試(不碰 live)
 ```
 
@@ -111,8 +114,8 @@ ai_radar/
 - **賽馬 T1/T2 tier_map**:yfinance 分不出 PLTR(T2)vs MSFT/ORCL(T1,都是 "Software - Infrastructure")→ 需手動 tier_map(像 refine)。破壞線**按名不按桶**(賽馬賭哪匹馬贏,是個股特有的事)。
 - ~~**Block 3**:造合約 + **路由器**~~ **已完成(純邏輯已測,Colab 驗證待跑)**:`router.py`——`route()` 論點時鐘(帶日期催化劑→凸性、無/已過→槓桿)、`build_card()` 組 SPEC §6 合約卡(含損益兩平%、G0 bypass 誠實標記、條件式聲明)、`scan_one()` 單標的走完路由→透鏡→出卡,回傳格式即 tracer 要收的紀錄。**待補**:賽馬 T1 軟催化劑(`CVX_SOFT_CATALYST`,需破壞線基建)與 tier_map(見下)。
 - **chain 層級 NO_DATA(修正)**:Colab 真實觀察到 Yahoo 時段性整批缺 OI(同日同 spot,前跑過 OI 250 張、後跑 0 張)→ 空 chain 或全 chain OI=0 時透鏡回 `NO_DATA`(`NO_CONTRACTS` / `LIQ_NO_OI_DATA`)而非 EXCLUDE——資料缺失要降級,不是製造假淘汰(承 §6.2 教訓)。
-- **Block 4**:催化劑 helper(財報/事件日,只呈現不裁決;餵路由器 + 餵人看 T-N 天)。
-- **Block 5**:shadow tracer(先 collect_only,回填 T+5/10/20,雙向檢查存活者放對沒/被排除者砍錯沒;min_samples 30 且人工週審後才**建議**調參,不自動改 config)。
+- ~~**Block 4**:催化劑 helper~~ **已完成(純邏輯已測)**:`catalysts.py`——`next_catalyst()` 挑最近的未來事件(含今天;已過/日期壞 → 無時鐘),`format_clock()` 出 T-N 標記。**lookahead 只標注不裁決**:超過 `catalyst.lookahead_days` 的事件照樣回傳(標 `within_lookahead: false`、印「遠期」),要不要砍遠期時鐘是人的事。live 抓取(yfinance calendar)在 notebook 的 `fetch_earnings_events`。
+- ~~**Block 5**:shadow tracer~~ **已完成(純邏輯已測,收集已開始)**:`tracer.py`——`record_scan()` 收 scan_one 紀錄(存活者含假設卡/排除者含理由/NO_DATA 含原因)、`due_backfills()` 算哪些 (scan, T+N) 到期未回填(冪等)、`record_outcome()` 回填標的(+可選選擇權)報酬、`report()` 雙向報表(PASS 組=放對沒、EXCLUDE:code 組=砍錯沒)。**凍結閾值:未達 min_samples 30 前 `tuning_unlocked: false`;達標後也只產報表,人工週審拍板,tracer 永不自動改 config。** state 檔 `state/tracer.jsonl` 已進版控例外,跑完要 commit 才累積。
 - **G0 曝險護欄**(客製化,最後做):台積個人總曝險(工作+新台幣資產+部位)超上限就擋;一旦開就常開。put/對沖左尾另議,不在只-call 範圍。
 
 ## 10. 開放問題(落地時順手定)

@@ -69,6 +69,7 @@ def scan_one(ticker, bucket, S, r, contracts, cfg, *, catalyst_dte=None,
                       g0_enabled=cfg.get("exposure", {}).get("enabled", False), asof=asof)
     return {"ticker": ticker, "bucket": bucket, "tier": tier, "route": lens,
             "verdict": res["verdict"], "code": res.get("code"),
+            "spot": round(S, 2),   # tracer 回填 T+N 報酬的基準
             "metrics": res.get("metrics"), "card": card, "asof": asof}
 
 
