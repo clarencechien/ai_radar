@@ -222,4 +222,7 @@ if __name__ == "__main__":
             if rec["code"] == "LIQ_NO_OI_DATA":
                 print("  ↳ Yahoo 這個時段 OI 整批缺 → 資料缺失非真淘汰,美股盤中重跑")
 
-    print("\n注意:IV 全由 implied_vol 從 mid 自算;若合約數為 0,多半是 bid/ask 為空(收盤後)。")
+    after = series_by_key(IV_HISTORY)
+    print(f"\nIV 自舉:跑完累計 NVDA {len(after.get('NVDA', []))} / MU {len(after.get('MU', []))} 筆"
+          f" → 記得把 state/iv_history.jsonl commit 回 repo,樣本才會跨 session 累積")
+    print("注意:IV 全由 implied_vol 從 mid 自算;若合約數為 0,多半是 bid/ask 為空(收盤後)。")
