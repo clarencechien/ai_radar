@@ -21,3 +21,10 @@
 {"ticker": "SOXX", "bucket": "ETF代理", "source": "refine", "gics_sub": null, "ts": "2026-07-02T05:19:47+00:00"}
 {"ticker": "TSM", "bucket": "製造", "source": "refine", "gics_sub": "Semiconductors", "ts": "2026-07-02T05:19:47+00:00"}
 {"ticker": "VST", "bucket": "電力", "source": "gics", "gics_sub": "Utilities - Independent Power Producers", "ts": "2026-07-02T05:19:47+00:00"}
+{"ticker": "AAPL", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Consumer Electronics", "ts": "2026-07-02T07:15:52+00:00"}
+{"ticker": "CSCO", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Communication Equipment", "ts": "2026-07-02T07:15:52+00:00"}
+{"ticker": "NXPI", "bucket": "半導體", "source": "gics", "gics_sub": "Semiconductors", "ts": "2026-07-02T07:15:53+00:00"}
+{"ticker": "QCOM", "bucket": "半導體", "source": "gics", "gics_sub": "Semiconductors", "ts": "2026-07-02T07:15:53+00:00"}
+{"ticker": "SNDK", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Computer Hardware", "ts": "2026-07-02T07:15:53+00:00"}
+{"ticker": "STX", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Computer Hardware", "ts": "2026-07-02T07:15:53+00:00"}
+{"ticker": "TXN", "bucket": "半導體", "source": "gics", "gics_sub": "Semiconductors", "ts": "2026-07-02T07:15:53+00:00"}
