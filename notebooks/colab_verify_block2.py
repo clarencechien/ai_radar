@@ -20,7 +20,8 @@ from ai_radar.lenses import (  # noqa: E402
     leverage_lens, convexity_lens, _passes_liquidity, _valid_contract)
 from ai_radar.router import scan_one, format_card  # noqa: E402
 from ai_radar.catalysts import next_catalyst, format_clock  # noqa: E402
-from ai_radar.tracer import record_scan, record_outcome, due_backfills, report  # noqa: E402
+from ai_radar.tracer import (  # noqa: E402
+    record_scan, record_outcome, due_backfills, report, scanned_on)
 
 CFG = load_json(os.path.join(os.path.dirname(__file__), "..", "config", "config.json"))
 TODAY = dt.date.today()
@@ -224,8 +225,16 @@ if __name__ == "__main__":
     # --- Block 5:shadow tracer(collect_only:收掃描 → 回填到期的 T+N → 報表)---
     print("\n=== Block 5 · shadow tracer(collect_only)===")
     TRACER = os.path.join(STATE_DIR, "tracer.jsonl")
+    seen = scanned_on(TRACER, TODAY)
+    saved = skipped = 0
     for rec in recs:
-        record_scan(TRACER, rec)
+        vs = seen.get(rec["ticker"])
+        # 同日去重:已有實判不重收;只有 NO_DATA 時,盤中補到實判可以收
+        if vs is None or (rec["verdict"] != "NO_DATA" and vs == {"NO_DATA"}):
+            record_scan(TRACER, rec)
+            saved += 1
+        else:
+            skipped += 1
     due = due_backfills(TRACER, TODAY, CFG["tracer"]["horizons_days"])
     filled = 0
     for d in due:
@@ -237,7 +246,7 @@ if __name__ == "__main__":
                        d["spot_then"], now_px, option_mid_then=d["option_mid_then"])
         filled += 1
     rep = report(TRACER, CFG["tracer"]["min_samples"])
-    print(f"本次收 {len(recs)} 筆掃描;到期回填 {filled}/{len(due)};"
+    print(f"本次收 {saved} 筆掃描(同日重複跳過 {skipped});到期回填 {filled}/{len(due)};"
           f"累計 outcome {rep['outcome_count']}(調參解鎖需 ≥{rep['min_samples']},"
           f"目前 {rep['tuning_unlocked']})")
     for k, hs in rep["by_verdict"].items():

@@ -46,11 +46,29 @@ def _scan_date(rec: dict) -> date:
     return datetime.fromisoformat(rec["ts"]).date()
 
 
+def scanned_on(path: str, day: date) -> dict:
+    """指定日期已收的掃描:{ticker: {verdicts}}。
+
+    供呼叫端同日去重:已有實判(非 NO_DATA)當日不重收;
+    只有 NO_DATA(時段性缺資料)時,之後盤中補到實判仍可收。
+    """
+    out: dict = {}
+    for s in scans(path):
+        if _scan_date(s) == day:
+            out.setdefault(s["ticker"], set()).add(s["verdict"])
+    return out
+
+
 def due_backfills(path: str, today: date, horizons: list[int]) -> list[dict]:
-    """哪些 (scan, horizon) 已到期且還沒回填。回傳含回填所需的 then 值。"""
+    """哪些 (scan, horizon) 已到期且還沒回填。回傳含回填所需的 then 值。
+
+    NO_DATA 掃描跳過:沒做出判斷,T+N 報酬回答不了「放對沒/砍錯沒」。
+    """
     done = {(o["ticker"], o["scan_ts"], o["horizon_days"]) for o in outcomes(path)}
     due = []
     for s in scans(path):
+        if s.get("verdict") == "NO_DATA":
+            continue
         age = (today - _scan_date(s)).days
         for h in horizons:
             if age >= h and (s["ticker"], s["ts"], h) not in done:

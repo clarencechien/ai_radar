@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from ai_radar.catalysts import next_catalyst, format_clock  # noqa: E402
 from ai_radar.tracer import (  # noqa: E402
-    record_scan, record_outcome, due_backfills, report, scans, outcomes)
+    record_scan, record_outcome, due_backfills, report, scans, outcomes, scanned_on)
 
 TODAY = dt.date(2026, 7, 2)
 
@@ -90,6 +90,26 @@ def test_report_two_way_and_lock(tmp_path):
     assert rep["by_verdict"]["EXCLUDE:LEV_IV_HIGH"]["T+5"]["max_ret_pct"] == 30.0
     assert rep["tuning_unlocked"] is False                   # 2 < 30 → 凍結
     assert rep["mode"] == "collect_only"
+
+
+def test_no_data_scans_not_backfilled(tmp_path):
+    """NO_DATA 掃描沒做出判斷 → 不進回填佇列(回答不了放對/砍錯)。"""
+    p = str(tmp_path / "tracer.jsonl")
+    record_scan(p, _scan("NVDA", "NO_DATA", code="LIQ_NO_OI_DATA", spot=197.58,
+                         ts="2026-06-20T21:40:00+00:00"))
+    assert due_backfills(p, TODAY, [5, 10, 20]) == []
+
+
+def test_scanned_on_for_same_day_dedup(tmp_path):
+    p = str(tmp_path / "tracer.jsonl")
+    record_scan(p, _scan("NVDA", "NO_DATA", code="LIQ_NO_OI_DATA",
+                         ts="2026-07-02T10:00:00+00:00"))
+    record_scan(p, _scan("MU", "EXCLUDE", code="CVX_NO_STRIKE",
+                         ts="2026-07-02T10:00:00+00:00"))
+    record_scan(p, _scan("MU", "PASS", ts="2026-07-01T21:40:00+00:00"))   # 昨天 → 不算
+    seen = scanned_on(p, TODAY)
+    assert seen == {"NVDA": {"NO_DATA"}, "MU": {"EXCLUDE"}}
+    # 呼叫端規則:NVDA 今天只有 NO_DATA → 盤中補到實判可收;MU 已有實判 → 跳過
 
 
 def test_outcome_no_data_degrades(tmp_path):
