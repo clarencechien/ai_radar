@@ -18,6 +18,7 @@ from ai_radar.rates import yield_quote_to_decimal, resolve_rate  # noqa: E402
 from ai_radar.state import append_record, latest_by_key, series_by_key  # noqa: E402
 from ai_radar.lenses import (  # noqa: E402
     leverage_lens, convexity_lens, _passes_liquidity, _valid_contract)
+from ai_radar.router import scan_one, format_card  # noqa: E402
 
 CFG = load_json(os.path.join(os.path.dirname(__file__), "..", "config", "config.json"))
 TODAY = dt.date.today()
@@ -153,6 +154,7 @@ if __name__ == "__main__":
         c = out["contract"]
         print(f"  → {c['expiry']} ${c['strike']:.0f}C  mid≈${c['mid']:.2f}")
         print(f"     {out['metrics']}")
+    nvda_S, nvda_r, nvda_chain = S, R, chain
 
     # --- 凸性透鏡:MU,催化劑=下次財報 ---
     print("\n=== 凸性透鏡 · MU(催化劑=財報)===")
@@ -196,5 +198,28 @@ if __name__ == "__main__":
             c = out["contract"]
             print(f"  → {c['expiry']} ${c['strike']:.0f}C  mid≈${c['mid']:.2f}")
             print(f"     {out['metrics']}")
+    mu_S, mu_r = S, R
+    mu_chain = chain if cat_dte is not None else []
+
+    # --- Block 3:路由器 + 條件式合約卡(重用上面抓好的資料)---
+    print("\n=== Block 3 · 路由器 + 合約卡 ===")
+    asof = dt.datetime.now().isoformat(timespec="minutes")
+    recs = [
+        # NVDA 無帶日期催化劑 → 論點時鐘路由到槓桿透鏡
+        scan_one("NVDA", "加速器", nvda_S, nvda_r, nvda_chain, CFG,
+                 iv_history=iv_hist.get("NVDA"), asof=asof),
+        # MU 有財報時鐘 → 凸性透鏡(記憶體桶,不帶 tier)
+        scan_one("MU", "記憶體", mu_S, mu_r, mu_chain, CFG,
+                 catalyst_dte=cat_dte, realized_vol_val=rv,
+                 iv_history=iv_hist.get("MU"), asof=asof),
+    ]
+    for rec in recs:
+        if rec["card"]:
+            print(format_card(rec["card"]))
+        else:
+            print(f"{rec['ticker']}(route={rec['route']}): "
+                  f"{rec['verdict']} {rec['code'] or ''}  {rec['metrics'] or ''}")
+            if rec["code"] == "LIQ_NO_OI_DATA":
+                print("  ↳ Yahoo 這個時段 OI 整批缺 → 資料缺失非真淘汰,美股盤中重跑")
 
     print("\n注意:IV 全由 implied_vol 從 mid 自算;若合約數為 0,多半是 bid/ask 為空(收盤後)。")
