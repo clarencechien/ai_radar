@@ -39,7 +39,8 @@
         "soft_catalyst": false
       }
     },
-    "cvx_prem_max_pct": 1.5
+    "cvx_prem_max_pct": 1.5,
+    "cvx_iv_pct_max": 60
   },
   "exposure": {
     "enabled": false,
@@ -49,7 +50,9 @@
   "data": {
     "source": "yfinance",
     "iv_percentile_min_history_days": 60,
-    "realized_vol_window_days": 20
+    "realized_vol_window_days": 20,
+    "risk_free_rate_default": 0.045,
+    "rate_tenor_cutoff_days": 365
   },
   "catalyst": {
     "surface_earnings": true,

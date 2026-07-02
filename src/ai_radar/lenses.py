@@ -75,14 +75,21 @@ def leverage_lens(contracts, S, r, cfg, iv_history=None):
     }
 
 
-def convexity_lens(contracts, S, r, realized_vol_val, catalyst_dte, cfg, tier=None):
-    """凸性透鏡:帶日期催化劑、便宜價外、過 IV÷實現波動 edge 閘、選 max gamma/權利金。
+def convexity_lens(contracts, S, r, realized_vol_val, catalyst_dte, cfg, tier=None,
+                   iv_history=None):
+    """凸性透鏡:帶日期催化劑、便宜價外、過 edge 閘、選 max gamma/權利金。
 
+    edge 閘基準(HANDOFF §8.3 改良):
+    - IV 自身歷史夠(自舉完成)→ 用 IV percentile 當基準,不受實現波動失真影響
+      (拋物線行情把 realized vol 灌到 130%+ 時,舊 ratio 閘永遠說「便宜」)。
+    - 歷史不足 → 後備:IV ÷ 實現波動 ratio(原行為)。
     tier 只給賽馬桶用(T1/T2 各有自己的 edge 閘);其他桶傳 None 走基準閘。
     """
     cvx, liq = cfg["convexity"], cfg["liquidity"]
-    ratio_max = cvx.get("racehorse_tiers", {}).get(tier, {}).get(
-        "cvx_iv_ratio_max", cvx["cvx_iv_ratio_max"])
+    tier_cfg = cvx.get("racehorse_tiers", {}).get(tier, {})
+    ratio_max = tier_cfg.get("cvx_iv_ratio_max", cvx["cvx_iv_ratio_max"])
+    pct_max = tier_cfg.get("cvx_iv_pct_max", cvx.get("cvx_iv_pct_max", 100.0))
+    ivp_min = cfg["data"]["iv_percentile_min_history_days"]
 
     if catalyst_dte is None:
         return {"lens": "convexity", "verdict": "SKIP", "code": "NO_CATALYST"}
@@ -111,12 +118,23 @@ def convexity_lens(contracts, S, r, realized_vol_val, catalyst_dte, cfg, tier=No
     if not cands:
         return {"lens": "convexity", "verdict": "EXCLUDE", "code": "CVX_NO_STRIKE"}
 
-    # edge 閘:事件 IV(取最接近 ATM 的價外 IV) ÷ 實現波動
+    # edge 閘:事件 IV = 最接近 ATM 的價外 IV;percentile 優先、ratio 後備
     event_iv = min(cands, key=lambda x: x[1])[0]["iv"]
     ratio = event_iv_ratio(event_iv, realized_vol_val)
-    if ratio is not None and ratio > ratio_max:
-        return {"lens": "convexity", "verdict": "EXCLUDE", "code": "CVX_IV_PRICED",
-                "metrics": {"iv_realized_ratio": round(ratio, 2), "ratio_max": ratio_max}}
+    pct = iv_percentile(event_iv, iv_history or [], ivp_min)
+    if pct is not None:
+        edge_basis = "iv_percentile"
+        if pct > pct_max:
+            return {"lens": "convexity", "verdict": "EXCLUDE", "code": "CVX_IV_PRICED",
+                    "metrics": {"edge_basis": edge_basis, "iv_percentile": round(pct, 1),
+                                "pct_max": pct_max,
+                                "iv_realized_ratio": None if ratio is None else round(ratio, 2)}}
+    else:
+        edge_basis = None if ratio is None else "iv_realized_ratio"
+        if ratio is not None and ratio > ratio_max:
+            return {"lens": "convexity", "verdict": "EXCLUDE", "code": "CVX_IV_PRICED",
+                    "metrics": {"edge_basis": edge_basis,
+                                "iv_realized_ratio": round(ratio, 2), "ratio_max": ratio_max}}
 
     best, best_metric, best_g = None, -1.0, None
     for c, _ in cands:
@@ -129,6 +147,8 @@ def convexity_lens(contracts, S, r, realized_vol_val, catalyst_dte, cfg, tier=No
     return {
         "lens": "convexity", "verdict": "PASS", "code": None, "contract": best,
         "metrics": {"gamma_per_premium": round(best_metric, 5),
+                    "edge_basis": edge_basis,
+                    "iv_percentile": None if pct is None else round(pct, 1),
                     "iv_realized_ratio": None if ratio is None else round(ratio, 2),
                     "otm_pct": round((best["strike"] - S) / S * 100, 1),
                     "tier": tier},

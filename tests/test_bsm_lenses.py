@@ -14,7 +14,7 @@ CFG = {
     "leverage": {"lev_iv_pct_max": 40, "lev_delta_lo": 0.70, "lev_delta_hi": 0.85,
                  "lev_dte_min": 365, "lev_pick_metric": "min_extrinsic_per_delta"},
     "convexity": {"cvx_iv_ratio_max": 1.3, "cvx_prem_max_pct": 1.5, "cvx_otm_max_pct": 25,
-                  "earn_window_days": 10, "target_move_pct": 30,
+                  "earn_window_days": 10, "target_move_pct": 30, "cvx_iv_pct_max": 60,
                   "racehorse_tiers": {"T1": {"cvx_iv_ratio_max": 1.1},
                                       "T2": {"cvx_iv_ratio_max": 1.5}}},
     "data": {"iv_percentile_min_history_days": 60},
@@ -166,6 +166,33 @@ def test_spread_gate_enforced_when_quotes_present():
 
     no_quote = _mk(180, 550, 40, 0.40)            # 無 bid/ask → 靠 OI,放行
     assert leverage_lens([no_quote], S, r, CFG)["verdict"] == "PASS"
+
+
+def test_convexity_edge_gate_prefers_iv_percentile_over_ratio():
+    """§8.3 改良:拋物線行情把實現波動灌到 130%+ 時,舊 ratio 閘分母失真
+    永遠說「便宜」;自舉完成後改用 IV 自身歷史 percentile 當基準。"""
+    S, r = 100, 0.045
+    chain = [_mk(112, 40, 1.2, 0.80)]
+    # 歷史 IV 都遠低於 0.80 → percentile 100 > 60 → 擋。
+    # 注意:rv=1.30 讓 ratio=0.62,舊閘會誤放行 —— 這正是 MU 的失真場景。
+    hist_low = [0.30 + 0.001 * i for i in range(80)]
+    out = convexity_lens(chain, S, r, realized_vol_val=1.30,
+                         catalyst_dte=30, cfg=CFG, iv_history=hist_low)
+    assert out["verdict"] == "EXCLUDE" and out["code"] == "CVX_IV_PRICED"
+    assert out["metrics"]["edge_basis"] == "iv_percentile"
+
+    # 反向:0.80 落在自己歷史低檔 → 放行,即使 ratio=2.67 舊閘會誤擋。
+    hist_high = [0.90 + 0.001 * i for i in range(80)]
+    out2 = convexity_lens(chain, S, r, realized_vol_val=0.30,
+                          catalyst_dte=30, cfg=CFG, iv_history=hist_high)
+    assert out2["verdict"] == "PASS", out2
+    assert out2["metrics"]["edge_basis"] == "iv_percentile"
+
+    # 歷史不足 → 後備 ratio 閘(原行為):ratio=2.67 > 1.3 → 擋。
+    out3 = convexity_lens(chain, S, r, realized_vol_val=0.30,
+                          catalyst_dte=30, cfg=CFG, iv_history=[0.5] * 10)
+    assert out3["verdict"] == "EXCLUDE"
+    assert out3["metrics"]["edge_basis"] == "iv_realized_ratio"
 
 
 def test_lenses_degrade_on_bad_contract_no_crash():
