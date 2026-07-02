@@ -14,7 +14,8 @@ import yfinance as yf  # noqa: E402
 from ai_radar import bsm  # noqa: E402
 from ai_radar.universe import load_json  # noqa: E402
 from ai_radar.volatility import realized_vol  # noqa: E402
-from ai_radar.lenses import leverage_lens, convexity_lens  # noqa: E402
+from ai_radar.lenses import (  # noqa: E402
+    leverage_lens, convexity_lens, _passes_liquidity, _valid_contract)
 
 CFG = load_json(os.path.join(os.path.dirname(__file__), "..", "config", "config.json"))
 R = 0.045          # 無風險利率(之後可接 T-bill;先固定)
@@ -123,6 +124,25 @@ if __name__ == "__main__":
         cat_dte = None
     if cat_dte is not None:
         chain = build_contracts("MU", S, max(cat_dte, 1), cat_dte + 60, otm_only=True)
+
+        # 診斷:逐關淘汰數,讓 CVX 的 EXCLUDE 不再是黑盒
+        cvx = CFG["convexity"]
+        prem_cap = cvx["cvx_prem_max_pct"] / 100.0 * S
+        dte_hi = cat_dte + cvx["earn_window_days"] + 45
+        liq_ok = [c for c in chain
+                  if _valid_contract(c) and _passes_liquidity(c, CFG["liquidity"])]
+        otm_ok = [c for c in liq_ok
+                  if 0 < (c["strike"] - S) / S * 100.0 <= cvx["cvx_otm_max_pct"]]
+        prem_ok = [c for c in otm_ok if c["mid"] <= prem_cap]
+        dte_ok = [c for c in prem_ok if cat_dte <= c["dte"] <= dte_hi]
+        print(f"  診斷:抓到 {len(chain)} 張 | 過流動性 {len(liq_ok)} | "
+              f"價外≤{cvx['cvx_otm_max_pct']}% {len(otm_ok)} | "
+              f"權利金≤${prem_cap:.1f} {len(prem_ok)} | 到期窗[{cat_dte},{dte_hi}] {len(dte_ok)}")
+        if otm_ok and not prem_ok:
+            cheapest = min(c["mid"] for c in otm_ok)
+            print(f"  最便宜的合格價外要 ${cheapest:.1f},上限 ${prem_cap:.1f} → "
+                  f"高波動下「便宜價外」不存在,權利金閘照設計排除")
+
         # MU 是記憶體桶(收費員),不是賽馬 → 不帶 tier,走基準 edge 閘
         out = convexity_lens(chain, S, R, rv, cat_dte, CFG)
         print("verdict:", out["verdict"], out.get("code") or "")
