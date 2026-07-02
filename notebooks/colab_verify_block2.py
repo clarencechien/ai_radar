@@ -22,6 +22,7 @@ from ai_radar.router import scan_one, format_card  # noqa: E402
 from ai_radar.catalysts import next_catalyst, format_clock  # noqa: E402
 from ai_radar.tracer import (  # noqa: E402
     record_scan, record_outcome, due_backfills, report, scanned_on)
+from ai_radar.report import render_report  # noqa: E402
 
 CFG = load_json(os.path.join(os.path.dirname(__file__), "..", "config", "config.json"))
 TODAY = dt.date.today()
@@ -252,7 +253,18 @@ if __name__ == "__main__":
     for k, hs in rep["by_verdict"].items():
         print(f"  {k}: {hs}")
 
-    after = series_by_key(IV_HISTORY)
+    # --- 人看的報告:RADAR.md(repo root),nightly Action 會一起 commit ---
+    after_iv = series_by_key(IV_HISTORY)
+    md = render_report(
+        recs, asof=asof, r_short=R_SHORT, r_long=R_LONG, r_default=R_DEFAULT,
+        iv_counts={t: len(v) for t, v in after_iv.items()},
+        ivp_min=CFG["data"]["iv_percentile_min_history_days"], tracer_report=rep)
+    radar_path = os.path.join(os.path.dirname(__file__), "..", "RADAR.md")
+    with open(radar_path, "w", encoding="utf-8") as f:
+        f.write(md)
+    print(f"\n已寫人看的報告 → RADAR.md(存活者 {sum(1 for r in recs if r['card'])} 張卡)")
+
+    after = after_iv
     print(f"\nIV 自舉:跑完累計 NVDA {len(after.get('NVDA', []))} / MU {len(after.get('MU', []))} 筆"
           f" → 記得把 state/iv_history.jsonl + state/tracer.jsonl commit 回 repo,"
           f"樣本才會跨 session 累積")
