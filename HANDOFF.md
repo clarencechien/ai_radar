@@ -55,11 +55,15 @@ ai_radar/
     rates.py                    Block 2.5 T-bill 利率(按天期挑,NO_DATA 降級)
     router.py                   Block 3 路由器(論點時鐘)+ 條件式合約卡
     report.py                   人看的 RADAR.md 報告渲染(nightly 自動生成於 root)
+    scan.py                     正式進入點純邏輯:掃整個宇宙(fetcher 注入,單檔炸降級)
+    live_yf.py                  yfinance live 轉接層(延遲載入,離線 import 不炸)
     catalysts.py                Block 4 催化劑 helper(標時鐘,只呈現不裁決)
     tracer.py                   Block 5 shadow tracer(collect_only + T+N 回填 + 雙向報表)
   notebooks/
     colab_verify_block1.py      Block 1 live 驗證(需 Colab)
-    colab_verify_block2.py      Block 2 live 驗證(需 Colab,含診斷)
+    colab_verify_block2.py      Block 2 live 驗證(需 Colab,含診斷;開發除錯用)
+    nightly_scan.py             ★ 正式 nightly 進入點:全宇宙掃描 → tracer → RADAR.md
+  config/universe_seed.json     過渡期宇宙 seed(Block 1.5 真 ETF 持股後淘汰)
   tests/
     test_universe.py            Block 1 純邏輯
     test_universe_real.py       用真實 industry 字串鎖住 23 檔歸桶

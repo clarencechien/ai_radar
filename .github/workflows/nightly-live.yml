@@ -32,14 +32,14 @@ jobs:
       - name: 離線回歸(邏輯先綠燈,再碰 live)
         run: python -m pytest tests/ -q
 
-      - name: live 掃描(yfinance;缺資料 NO_DATA 降級)
-        run: python notebooks/colab_verify_block2.py
+      - name: live 全宇宙掃描(yfinance;缺資料 NO_DATA 降級)
+        run: python notebooks/nightly_scan.py
 
       - name: commit state 樣本 + RADAR.md 報告
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state/iv_history.jsonl state/tracer.jsonl RADAR.md
+          git add state/iv_history.jsonl state/tracer.jsonl state/bucket_map.jsonl RADAR.md
           if git diff --cached --quiet; then
             echo "state/報告皆無變化,不 commit"
           else
