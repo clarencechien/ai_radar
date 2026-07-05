@@ -23,6 +23,43 @@
 - [x] **Block 4 — 催化劑 helper** — `catalysts.py` 標時鐘(最近未來事件 → T-N),只呈現不裁決;遠期事件標注不砍。
 - [x] **Block 5 — shadow tracer** — `tracer.py` collect_only:收掃描紀錄 → T+5/10/20 到期回填 → 雙向報表(存活者放對沒/被排除者砍錯沒)。閾值凍結,min_samples 30 前不解鎖,解鎖後也人工拍板。
 
+## 🔧 需要人工操作的事(照這裡做就好)
+
+### 1. 修 ETF 持股 CSV 連結(最優先——宇宙現在是縮水版)
+
+四條發行商 CSV 目前全掛,宇宙掉到「前十大聯集」後備(~18 檔;AIQ 全量應有 ~85 檔)。
+**操作**:到下面官網基金頁 → 找「Download Holdings / Full Holdings / 下載持股」按鈕 →
+**右鍵複製連結**(要的是 CSV 檔的直接下載網址,不是頁面網址)→ 貼進
+[`config/etf_sources.json`](./config/etf_sources.json) 對應的 `csv_url` → commit。
+隔晚報告的「宇宙來源」行會顯示 `csv` 表示修好了(現在是 `top10`)。
+
+| ETF | 發行商 | 官網基金頁 |
+|---|---|---|
+| SMH | VanEck | <https://www.vaneck.com/us/en/investments/semiconductor-etf-smh/> |
+| SOXX | iShares(BlackRock) | <https://www.ishares.com/us/products/239705/> |
+| AIQ | Global X | <https://www.globalxetfs.com/funds/aiq/> |
+| DRAM | (發行商自查:搜尋「DRAM ETF holdings」) | — |
+
+> 貼回來給 Claude 也可以,或自己改 json——格式:`"csv_url": "https://..."`。
+
+### 2. 補歸桶(RADAR.md「需人工處理」列的那幾檔)
+
+編輯 [`config/refine.json`](./config/refine.json),把 ticker 指到桶,例:
+
+```json
+{ "SNDK": "記憶體", "STX": "記憶體", "QCOM": "半導體-非AI" }
+```
+
+- 可用的權重桶:`製造`、`加速器`、`記憶體`、`設備`、`電力`、`賽馬`。
+- 不想讓某檔佔權重桶,就自訂一個非權重桶名(如 `半導體-非AI`),它仍會被中性掃描。
+- 待決清單以 [`RADAR.md`](./RADAR.md) Details「需人工處理」段為準(目前:AAPL、CSCO、NXPI、QCOM、SNDK、STX、TXN)。
+
+### 3. 之後的(不急,實作到了會再提示)
+
+- **賽馬 T1/T2 tier_map + 按名破壞線**:哪檔算 T1 雲廠/T2 敘事股、各自的論點破壞指標(SPEC §賽馬分層)。
+- **G0 曝險護欄**:你的台積總曝險數字(工作+資產+部位),`config.json → exposure`。
+- **11 月美股改冬令**:把 `.github/workflows/nightly-live.yml` 的 cron 從 `0 14` 改 `0 15`。
+
 ## 沙盒 vs Colab 分工
 純邏輯(聯集、歸桶、append-only)在任何環境可跑並有測試。
 **live 抓取(yfinance option chain、ETF 持股)需要能連 Yahoo/發行商的環境** → 用 Colab 或本地。
