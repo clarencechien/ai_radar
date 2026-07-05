@@ -119,7 +119,8 @@ ai_radar/
   - 自舉開始收樣本:notebook 每跑一次(每 ticker 每天一筆)append ATM IV 到 `state/iv_history.jsonl`(`series_by_key` 讀回)。**注意 Colab 環境是暫時的,`state/` 要 commit 回 repo 或存 Drive,樣本才會累積。**
 - ~~**Block 1.5**:接真 ETF 持股 CSV~~ **已完成(純邏輯已測,發行商 URL 待首跑驗證)**:
   - `etf_holdings.py`:CSV 解析(容忍 iShares 式前導雜訊、各家欄名)、ticker 正規化(BRK.B→BRK-B、剔現金列)、快照週更時效。
-  - 抓取鏈逐級降級:issuer CSV(`config/etf_sources.json`,**URL 會改版是髒活,首跑看 RADAR.md 宇宙來源行確認哪個活著**)→ yfinance 前十大後備 → 前次快照(`state/universe.jsonl`,進版控)→ `universe_seed.json`。
+  - 抓取鏈:issuer CSV(可選)→ **yfinance top10(正式主來源)** → 前次快照(`state/universe.jsonl`,進版控)→ `universe_seed.json`。
+  - **設計決策(2026-07-05,使用者拍板)**:top10 聯集就是正式宇宙,不是降級——本工具獵大象(SMH 前十大=72.5% 資產),ETF 長尾小部位是湯姆熊(optscnr)的獵場。issuer CSV URL 留在 `etf_sources.json` 當可選擴充,四檔 ETF 的 Yahoo top10 已用真資料驗證全通。
   - 新面孔才做 option 濾網(bucket_map 沒見過的),避免每晚重驗整個宇宙。
   - 「半導體粗桶 limbo」/NO_DATA 歸桶 → RADAR.md Details「需人工處理」段輸出補 refine 提醒。
 - **賽馬 T1/T2 tier_map**:yfinance 分不出 PLTR(T2)vs MSFT/ORCL(T1,都是 "Software - Infrastructure")→ 需手動 tier_map(像 refine)。破壞線**按名不按桶**(賽馬賭哪匹馬贏,是個股特有的事)。

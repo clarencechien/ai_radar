@@ -25,24 +25,7 @@
 
 ## 🔧 需要人工操作的事(照這裡做就好)
 
-### 1. 修 ETF 持股 CSV 連結(最優先——宇宙現在是縮水版)
-
-四條發行商 CSV 目前全掛,宇宙掉到「前十大聯集」後備(~18 檔;AIQ 全量應有 ~85 檔)。
-**操作**:到下面官網基金頁 → 找「Download Holdings / Full Holdings / 下載持股」按鈕 →
-**右鍵複製連結**(要的是 CSV 檔的直接下載網址,不是頁面網址)→ 貼進
-[`config/etf_sources.json`](./config/etf_sources.json) 對應的 `csv_url` → commit。
-隔晚報告的「宇宙來源」行會顯示 `csv` 表示修好了(現在是 `top10`)。
-
-| ETF | 發行商 | 官網基金頁 |
-|---|---|---|
-| SMH | VanEck | <https://www.vaneck.com/us/en/investments/semiconductor-etf-smh/> |
-| SOXX | iShares(BlackRock) | <https://www.ishares.com/us/products/239705/> |
-| AIQ | Global X | <https://www.globalxetfs.com/funds/aiq/> |
-| DRAM | (發行商自查:搜尋「DRAM ETF holdings」) | — |
-
-> 貼回來給 Claude 也可以,或自己改 json——格式:`"csv_url": "https://..."`。
-
-### 2. 補歸桶(RADAR.md「需人工處理」列的那幾檔)
+### 1. 補歸桶(RADAR.md「需人工處理」列的那幾檔)
 
 編輯 [`config/refine.json`](./config/refine.json),把 ticker 指到桶,例:
 
@@ -54,11 +37,16 @@
 - 不想讓某檔佔權重桶,就自訂一個非權重桶名(如 `半導體-非AI`),它仍會被中性掃描。
 - 待決清單以 [`RADAR.md`](./RADAR.md) Details「需人工處理」段為準(目前:AAPL、CSCO、NXPI、QCOM、SNDK、STX、TXN)。
 
-### 3. 之後的(不急,實作到了會再提示)
+### 2. 之後的(不急,實作到了會再提示)
 
 - **賽馬 T1/T2 tier_map + 按名破壞線**:哪檔算 T1 雲廠/T2 敘事股、各自的論點破壞指標(SPEC §賽馬分層)。
 - **G0 曝險護欄**:你的台積總曝險數字(工作+資產+部位),`config.json → exposure`。
 - **11 月美股改冬令**:把 `.github/workflows/nightly-live.yml` 的 cron 從 `0 14` 改 `0 15`。
+- **(可選)ETF 全量持股**:宇宙來源正式採 **Yahoo top10 聯集**——本工具獵大象,
+  SMH 前十大即佔 72.5% 資產,ETF 長尾小部位歸湯姆熊(`optscnr`)管。若日後想涵蓋
+  長尾,把發行商 CSV 直接下載網址貼進 [`config/etf_sources.json`](./config/etf_sources.json)
+  的 `csv_url`(VanEck/iShares/GlobalX 基金頁的「Download Holdings」),
+  隔晚宇宙來源行顯示 `csv` 即生效;不填就維持 top10,完全沒問題。
 
 ## 沙盒 vs Colab 分工
 純邏輯(聯集、歸桶、append-only)在任何環境可跑並有測試。

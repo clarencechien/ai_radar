@@ -49,10 +49,10 @@ def fetch_universe_tickers():
     seed = _load_cfg_json("universe_seed.json")["tickers"]
     snaps = list(read_records(UNIVERSE_SNAP))
     last = snaps[-1] if snaps else None
-    # 快照沿用條件:未過期「且」當時至少一個來源抓到 CSV 全量;
-    # top10 後備湊出來的縮水宇宙不沿用,每晚重試 CSV,直到 URL 修好為止。
-    if (last and not is_stale(last.get("ts", ""), TODAY)
-            and "csv" in (last.get("sources") or {}).values()):
+    # 設計決策(2026-07-05):Yahoo top10 聯集是「正式」宇宙來源,不是降級——
+    # 本工具獵的是大象(SMH 前十大=72.5% 資產),ETF 長尾小部位歸湯姆熊(optscnr)。
+    # issuer CSV 全量是可選擴充(config/etf_sources.json 有 URL 才試)。
+    if last and not is_stale(last.get("ts", ""), TODAY):
         return last["tickers"], f"快照 {last['ts'][:10]}(週更未到期)"
 
     srcs = _load_cfg_json("etf_sources.json")
