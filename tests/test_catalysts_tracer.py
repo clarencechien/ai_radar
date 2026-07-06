@@ -8,7 +8,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from ai_radar.catalysts import next_catalyst, format_clock  # noqa: E402
 from ai_radar.tracer import (  # noqa: E402
-    record_scan, record_outcome, due_backfills, report, scans, outcomes, scanned_on)
+    record_scan, record_outcome, due_backfills, report, scans, outcomes, scanned_on,
+    open_cards, record_card_track, card_report)
 
 TODAY = dt.date(2026, 7, 2)
 
@@ -110,6 +111,51 @@ def test_scanned_on_for_same_day_dedup(tmp_path):
     seen = scanned_on(p, TODAY)
     assert seen == {"NVDA": {"NO_DATA"}, "MU": {"EXCLUDE"}}
     # 呼叫端規則:NVDA 今天只有 NO_DATA → 盤中補到實判可收;MU 已有實判 → 跳過
+
+
+def test_card_tracking_lifecycle(tmp_path):
+    """合約卡追蹤:第一次上榜為基準 → 每晚標記 → 同日冪等 → 到期前 21 天停追。"""
+    p = str(tmp_path / "tracer.jsonl")
+    card = {"ticker": "NVDA", "expiry": "2028-01-21", "strike": 170.0,
+            "lens": "leverage", "premium": 57.98, "spot": 194.83}
+    record_scan(p, _scan("NVDA", "PASS", spot=194.83,
+                         ts="2026-07-06T14:30:00+00:00", card=card))
+    # 隔天又上榜(premium 變了)→ 基準仍是第一次的 57.98
+    record_scan(p, _scan("NVDA", "PASS", spot=200.0,
+                         ts="2026-07-07T14:30:00+00:00",
+                         card={**card, "premium": 60.10}))
+
+    due = open_cards(p, dt.date(2026, 7, 8))
+    assert len(due) == 1
+    c = due[0]
+    assert c["premium_then"] == 57.98 and c["scan_ts"].startswith("2026-07-06")
+    assert c["dte_left"] == (dt.date(2028, 1, 21) - dt.date(2026, 7, 8)).days
+
+    rec = record_card_track(p, c, mid_now=63.2, spot_now=205.0)
+    assert rec["option_ret_pct"] == 9.0                       # 57.98 → 63.2
+    # 同日冪等:剛記過 → 不再 due(ts 是今天 UTC,用今天查)
+    assert open_cards(p, dt.datetime.fromisoformat(rec["ts"]).date()) == []
+
+    # 到期前 21 天內 → 停追
+    assert open_cards(p, dt.date(2028, 1, 5)) == []
+    # 恰好剩 21 天 → 也不追(> 才追)
+    assert open_cards(p, dt.date(2027, 12, 31)) == []
+
+    rep = card_report(p)
+    assert len(rep) == 1
+    assert rep[0]["mid_now"] == 63.2 and rep[0]["n_marks"] == 1
+    assert rep[0]["option_ret_pct"] == 9.0
+
+
+def test_card_track_no_data_mid(tmp_path):
+    p = str(tmp_path / "tracer.jsonl")
+    card = {"ticker": "MU", "expiry": "2026-12-18", "strike": 1200.0,
+            "premium": 12.0, "spot": 1000.0}
+    record_scan(p, _scan("MU", "PASS", ts="2026-07-06T14:30:00+00:00", card=card))
+    c = open_cards(p, dt.date(2026, 7, 7))[0]
+    rec = record_card_track(p, c, mid_now=None, spot_now=1010.0)  # 市價缺 → NO_DATA
+    assert rec["option_ret_pct"] is None
+    assert card_report(p)[0]["mid_now"] is None
 
 
 def test_outcome_no_data_degrades(tmp_path):

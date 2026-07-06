@@ -64,6 +64,7 @@
       10,
       20
     ],
+    "card_track_stop_before_expiry_days": 21,
     "review_cadence": "weekly",
     "mode": "collect_only",
     "min_samples": 30
