@@ -26,26 +26,40 @@
 6. **NO_DATA 降級**:缺資料/無法反解 → 降級不崩潰。但**「數值超出先驗」不建 sanity gate**(慘痛教訓見 §6)。
 7. **三層框架**(承 optscnr):純規則自動 → 外部事實查核半自動 → 催化劑持續性 / 扣板機 = 永久人工。
 
-## 3. 已完成(都有離線測試,20 passed)
+## 3. 系統現況(2026-07-06:**已上線自主運轉**,54 個離線測試)
 
-- **Block 1 宇宙管線** (`src/ai_radar/universe.py`, `state.py`):
-  ETF 成分聯集 → 濾可 option → 自動歸桶。歸桶兩層:GICS 粗桶(`config/gics_map.json`,key 對準 yfinance `industry` 字串)+ `refine` 細桶(`config/refine.json`,處理 GICS 分不出的 加速器/記憶體/製造)。全 append-only。
-- **Block 2 雙透鏡** (`src/ai_radar/bsm.py`, `volatility.py`, `lenses.py`):
-  - `bsm.py`:BSM 封閉解 call 定價 + delta/gamma/vega/theta + IV 反解(bisection)。純 stdlib,對照教科書值驗過。
-  - `volatility.py`:實現波動(歷史股價自算)、IV percentile 自舉(樣本 <60 天回 None → 用代理)、event_iv_ratio。
-  - `lenses.py`:`leverage_lens`(低IV·高delta·長天期,選每單位 delta 時間價值最低)、`convexity_lens`(帶催化劑·便宜價外·過 IV÷實現波動 edge 閘,選 gamma/權利金最高)。
+**Block 1 → 5 全部完成並串成產線**,每個台灣平日 22:00 由 GitHub Action `nightly-live`
+自動跑 `notebooks/nightly_scan.py`:ETF top10 宇宙 → 歸桶 → 催化劑時鐘 → 路由 →
+雙透鏡 → 合約卡/排除 → tracer 收集/回填 → 產出人讀報告 `RADAR.md` + state 自動 commit。
+
+已用真資料驗證過的(07-02~07-06):
+- 兩透鏡都出過真卡(AVGO/MU/NVDA 槓桿、AAPL 凸性),排除帶碼、NO_DATA 誠實分流。
+- MU 權利金閘診斷實測:最便宜合格價外 $129.2 vs 上限 $14.6 → 高波動下照設計排除。
+- 四檔 ETF 的 Yahoo top10 全通;option 濾網正確剔除韓日股與貨幣基金。
+- 休市日守門(07-03 美股補假實際觸發過灌雜訊,已修)。
+
+模組摘要:
+- **Block 1+1.5 宇宙**(`universe.py`, `etf_holdings.py`):ETF top10 聯集(正式來源,見 §9 設計決策)→ 濾 option → GICS 粗桶 + refine 細桶,全 append-only。
+- **Block 2+2.5 雙透鏡**(`bsm.py`, `volatility.py`, `rates.py`, `lenses.py`):BSM 自算 + IV 反解、真 T-bill 按天期、edge 閘雙基準(IV 自身 percentile 優先、ratio 後備)、價差閘、髒合約/整鏈缺 OI 降級。
+- **Block 3 路由+卡**(`router.py`):論點時鐘(60 天內催化劑→凸性,否則槓桿)、SPEC §6 合約卡含情境倍數。
+- **Block 4 催化劑**(`catalysts.py`):標時鐘只呈現不裁決,遠期標注不砍。
+- **Block 5 tracer**(`tracer.py`):collect_only、T+5/10/20 回填、雙向報表、閾值凍結。
+- **產線**(`scan.py`, `live_yf.py`, `report.py`, `notebooks/nightly_scan.py`):單檔失敗降級不殺整晚;報告上半白話、下半 Details。
 
 ## 4. 檔案地圖
 
 ```
 ai_radar/
-  SPEC.md                       完整設計(v0.4 + 附錄 v0.4.1 修正)
+  SPEC.md                       完整設計(v0.4 + 附錄 v0.4.1/v0.4.2 實作紀錄)
   README.md                     進度 + 跑法
   HANDOFF.md                    本檔
+  RADAR.md                      ★ 每晚自動生成的人讀報告(上半白話、下半 Details)
   config/
     config.json                 所有閾值(見 §7)
     gics_map.json               GICS industry → 粗桶(key 對準 yfinance)
     refine.json                 細桶 override(半導體內分 + ETF + GEV)
+    universe_seed.json          宇宙最終後備(ETF top10 全掛才用)
+    etf_sources.json            發行商 CSV URL(可選擴充;top10 是正式來源)
   src/ai_radar/
     state.py                    append-only JSONL helpers
     universe.py                 Block 1 宇宙管線(live fetch 用 DI 注入)
@@ -63,24 +77,29 @@ ai_radar/
   notebooks/
     colab_verify_block1.py      Block 1 live 驗證(需 Colab)
     colab_verify_block2.py      Block 2 live 驗證(需 Colab,含診斷;開發除錯用)
-    nightly_scan.py             ★ 正式 nightly 進入點:全宇宙掃描 → tracer → RADAR.md
-  config/universe_seed.json     過渡期宇宙 seed(Block 1.5 真 ETF 持股後淘汰)
+    nightly_scan.py             ★ 正式 nightly 進入點:全宇宙掃描 → tracer → RADAR.md(含休市守門)
+  state/                        append-only;iv_history/tracer/bucket_map/universe 四檔進版控
   tests/
     test_universe.py            Block 1 純邏輯
     test_universe_real.py       用真實 industry 字串鎖住 23 檔歸桶
+    test_etf_holdings.py        Block 1.5 CSV 解析 + 正規化 + 快照時效
     test_bsm_lenses.py          Block 2 數學 + 透鏡
     test_rates.py               Block 2.5 利率 + IV 序列
     test_router.py              Block 3 路由 + 合約卡 + chain 層級 NO_DATA
     test_catalysts_tracer.py    Block 4 時鐘 + Block 5 收集/回填/報表
+    test_scan.py                產線 scan_universe(路由分流/降級/回呼)
+    test_report.py              RADAR.md 兩段式渲染
+    test_e2e_offline.py         合成資料端到端(宇宙→…→tracer 報表)
   .github/workflows/test.yml    CI 純邏輯+合成 e2e 回歸(push/PR/手動)
   .github/workflows/nightly-live.yml  台灣 22:00 平日夜跑 live 掃描,state 樣本自動 commit 回 main(冬令要改 cron,見檔內註解)
 ```
 
-## 5. 沙盒 vs Colab 分工(關鍵約束)
+## 5. 環境分工(關鍵約束)
 
-- **純邏輯/數學**:任何環境可跑,有 pytest。CI 只跑這些。
-- **live 抓取**(yfinance option chain / 股價 / 財報日、ETF 持股 CSV):**需能連 Yahoo / 發行商網域**。開發沙盒連不到這些網域 → 這部分只能在 **Colab 或本地**驗。
-- 因此所有 live 相依都用**依賴注入**(fetcher 當參數傳入 `build_universe`),純邏輯才能離線測。
+- **純邏輯/數學**:任何環境可跑,有 pytest(54)。CI `tests` workflow 只跑這些。
+- **live 抓取**(yfinance chain/股價/財報日/ETF top10):**需能連 Yahoo**。開發沙盒連不到 → live 只能在 **GitHub Actions(`nightly-live`,排程+手動)、Colab、或本地**跑。
+- 因此所有 live 相依都用**依賴注入**(fetcher 傳進 `build_universe` / `scan_universe`),live 實作集中在 `live_yf.py`,純邏輯才能離線測。
+- GitHub runner 連 Yahoo 偶爾被擋 → 單檔 `FETCH_ERROR` 降級、整晚紅燈隔日自動重試,都不需要人工介入。
 
 ## 6. Block 2 真資料驗證的發現與修正(重要,含教訓)
 
@@ -104,12 +123,11 @@ ai_radar/
 - `tracer`: **mode collect_only**、min_samples 30(先收集不調參)
 - `buckets`: 製造 0(TSM 由 G0 管)/ 加速器 .30 / 記憶體 .25 / 設備 .15 / 電力 .10 / 賽馬 .20
 
-## 8. 待驗收:Block 2 收尾(下一步先做這個)
+## 8. ~~待驗收:Block 2 收尾~~ 已全數驗收(2026-07-06 Colab + nightly 真資料)
 
-在 Colab 跑 `python notebooks/colab_verify_block2.py`(**挑美股盤中時段**,台灣時間約 21:30 後,bid/ask 才有值),確認三件事:
-1. **NVDA** 盤中吐合理 LEAPS:診斷區會印「過 OI 幾張 / delta 落區間幾張 / delta 範圍」。期望挑到 delta 0.70–0.85、eff_leverage ~1.8–2.2x 的一張。
-2. **MU** 過凸性透鏡挑了哪張、`iv_realized_ratio` 多少。
-3. **edge 閘的已知弱點**:MU 實現波動現在 128%(拋物線灌出來的)。edge 閘 = event_iv ÷ realized_vol,分母太大 → ratio 永遠很低 → 永遠「過閘說便宜」。**這是用趨勢實現波動當基準的先天弱點。** 待改良方向:改用更長窗口實現波動,或改用「IV vs 自己 IV 歷史 percentile」(自舉機制正好給這個),而非 IV vs 近期實現波動。
+1. ✅ **NVDA** 盤中吐合理 LEAPS:2028-01 $170C、delta 0.74、eff_leverage 2.49x(真 5 年率 4.23%)。
+2. ✅ **MU** 凸性:`CVX_NO_STRIKE` 是權利金閘照設計排除——診斷實測最便宜合格價外 $129.2、上限 $14.6;134% 實現波動下「便宜價外」不存在,記憶體桶的凸性被市場全額標價(這正是本工具與湯姆熊互補之處)。
+3. ✅ **edge 閘弱點已修**(Block 2.5):改「IV 自身歷史 percentile 優先(`cvx_iv_pct_max`)、歷史不足退用 ratio」雙基準;自舉每晚收樣,60 筆後自動切換。
 
 ## 9. Roadmap(建議順序)
 
@@ -141,7 +159,11 @@ ai_radar/
 
 ```bash
 pip install -r requirements.txt
-python -m pytest tests/ -v      # 應 20 passed
+python -m pytest tests/ -v      # 應 54 passed(純邏輯 + 合成資料端到端)
 ```
-確認綠燈後,依 §8 的 Colab 結果收尾 Block 2,再進 §9 的 Block 3。
-使用者會在 Colab 跑 live 驗證並把輸出貼回;純邏輯/數學你可直接在本地寫+測。
+
+系統已上線自主運轉,接手前先弄清楚現場:
+1. 看 `RADAR.md`(最新一晚的產出)和 main 的 commit 歷史(`radar: nightly ...` = 每晚自動 commit)。
+2. live 驗證有三條路:GitHub Actions `nightly-live`(排程/手動)、Colab、本地——開發沙盒連不到 Yahoo,live 一律走這三個。使用者會把輸出貼回;純邏輯你直接本地寫+測。
+3. 待辦看 §9 尾端未劃掉的項目(tier_map/破壞線、G0)與 README「需要人工操作的事」。
+4. 動 code 前記住 §2 七個釘死決策與 §6 教訓;每次修正都要有測試鎖住,push 前確認 pytest exit code(pipe 會吃掉非零 exit,吃過一次虧)。

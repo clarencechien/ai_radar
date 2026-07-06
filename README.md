@@ -16,10 +16,10 @@
 
 ## 進度
 - [x] **Block 1 宇宙管線** — ETF 成分聯集 → 濾可 option → GICS 歸桶 + refine(append-only)。純邏輯已測。
-- [x] **Block 1.5 — 真 ETF 持股** — issuer CSV → yfinance 前十大 → 舊快照 → seed 逐級降級;週更快照進版控;歸桶未決輸出「需人工補 refine」提醒。發行商 URL 待首跑驗證。
+- [x] **Block 1.5 — 真 ETF 持股** — **Yahoo top10 聯集為正式來源**(本工具獵大象;SMH 前十大=72.5% 資產,長尾歸 `optscnr`),issuer CSV 可選擴充;週更快照進版控;歸桶未決輸出「需人工補 refine」提醒。四檔 ETF 真資料驗證全通。
 - [x] **Block 2 — 雙透鏡** — BSM 自算 Greeks + IV 反解 + 實現波動 + percentile 自舉。純數學已測(對照教科書值)。
-- [x] **Block 2.5 — 真 T-bill 利率 + edge 閘基準改良** — `rates.py` 按天期挑 ^IRX/^FVX;edge 閘改「IV 自身歷史 percentile 優先、ratio 後備」;IV 自舉開始收樣本(append-only)。純邏輯已測,Colab 驗證待跑。
-- [x] **Block 3 — 路由器 + 造合約** — 論點時鐘路由(帶日期催化劑→凸性、無→槓桿)+ 條件式單腿 call 合約卡(`router.py`)。純邏輯已測,Colab 驗證待跑;T1 軟催化劑與 tier_map 待補。
+- [x] **Block 2.5 — 真 T-bill 利率 + edge 閘基準改良** — `rates.py` 按天期挑 ^IRX/^FVX;edge 閘改「IV 自身歷史 percentile 優先、ratio 後備」;IV 自舉每晚收樣。真資料已驗(短 3.67%/長 4.23%)。
+- [x] **Block 3 — 路由器 + 造合約** — 論點時鐘路由(60 天內催化劑→凸性、否則→槓桿)+ 條件式單腿 call 合約卡(`router.py`)。兩透鏡都出過真卡;T1 軟催化劑與 tier_map 待補。
 - [x] **Block 4 — 催化劑 helper** — `catalysts.py` 標時鐘(最近未來事件 → T-N),只呈現不裁決;遠期事件標注不砍。
 - [x] **Block 5 — shadow tracer** — `tracer.py` collect_only:收掃描紀錄 → T+5/10/20 到期回填 → 雙向報表(存活者放對沒/被排除者砍錯沒)。閾值凍結,min_samples 30 前不解鎖,解鎖後也人工拍板。
 
@@ -73,9 +73,9 @@ NO_DATA、自舉/tracer 進度),由 nightly Action 自動生成並 commit,不用
 ## 自動化
 - `tests`(push/PR/手動):純邏輯 + 合成資料端到端回歸,不碰網路。
 - `nightly-live`(台灣平日 22:00,美股夏令盤中;可手動觸發):跑
-  `notebooks/nightly_scan.py` **全宇宙掃描**(seed 20 檔,Block 1.5 後換真 ETF 持股)
+  `notebooks/nightly_scan.py` **全宇宙掃描**(ETF top10 聯集,週更快照)
   → 每檔:催化劑時鐘 → 路由 → 雙透鏡 → 出卡/排除 → tracer;跑完把
-  `RADAR.md` + `state/`(IV 自舉、tracer、bucket_map)自動 commit 回 main。
+  `RADAR.md` + `state/` 自動 commit 回 main。美股休市日自動跳過。
   冬令要把 cron 改 15:00 UTC。單檔抓取失敗降級 `FETCH_ERROR`,不殺整晚。
 
 `colab_verify_block1.py` 會:
@@ -85,9 +85,11 @@ NO_DATA、自舉/tracer 進度),由 nightly Action 自動生成並 commit,不用
 
 ## 目錄
 ```
-config/     config.json + gics_map.json(粗桶)+ refine.json(半導體細桶)
-src/ai_radar/  universe.py(Block 1)、state.py(append-only)
-notebooks/  colab_verify_block1.py
-tests/      純邏輯單元測試
-state/      append-only 資料(預設 .gitignore)
+RADAR.md       每晚自動生成的人讀報告(上半白話、下半 Details)
+config/        config.json(閾值)+ gics_map/refine(歸桶)+ universe_seed/etf_sources(宇宙)
+src/ai_radar/  Block 1–5 模組 + scan.py(產線)+ live_yf.py(Yahoo 轉接)+ report.py(報告)
+notebooks/     nightly_scan.py(★正式進入點)+ colab_verify_block1/2.py(開發驗證)
+tests/         54 個離線測試(純邏輯 + 合成資料端到端)
+state/         append-only;iv_history/tracer/bucket_map/universe 進版控,自舉靠它累積
 ```
+完整檔案地圖與逐檔說明見 [`HANDOFF.md`](./HANDOFF.md) §4。
