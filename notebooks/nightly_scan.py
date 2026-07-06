@@ -49,10 +49,10 @@ def fetch_universe_tickers():
     seed = _load_cfg_json("universe_seed.json")["tickers"]
     snaps = list(read_records(UNIVERSE_SNAP))
     last = snaps[-1] if snaps else None
-    # 快照沿用條件:未過期「且」當時至少一個來源抓到 CSV 全量;
-    # top10 後備湊出來的縮水宇宙不沿用,每晚重試 CSV,直到 URL 修好為止。
-    if (last and not is_stale(last.get("ts", ""), TODAY)
-            and "csv" in (last.get("sources") or {}).values()):
+    # 設計決策(2026-07-05):Yahoo top10 聯集是「正式」宇宙來源,不是降級——
+    # 本工具獵的是大象(SMH 前十大=72.5% 資產),ETF 長尾小部位歸湯姆熊(optscnr)。
+    # issuer CSV 全量是可選擴充(config/etf_sources.json 有 URL 才試)。
+    if last and not is_stale(last.get("ts", ""), TODAY):
         return last["tickers"], f"快照 {last['ts'][:10]}(週更未到期)"
 
     srcs = _load_cfg_json("etf_sources.json")
@@ -117,6 +117,18 @@ def record_atm_iv(t, S, chain):
 
 
 if __name__ == "__main__":
+    # 休市守門:美股今天沒交易(假日)→ 資料全是上一交易日的,掃了只會
+    # 灌雜訊樣本進 tracer/IV 自舉 → 跳過本晚(判斷不了就照跑,交給降級)。
+    try:
+        last_trade = live_yf._yf().Ticker("SPY").history(period="1d").index[-1].date()
+        us_today = dt.datetime.now(dt.timezone(dt.timedelta(hours=-4))).date()
+        if last_trade < us_today:
+            print(f"美股休市(最近交易日 {last_trade},美東今天 {us_today})"
+                  f"→ 本晚跳過,不掃描、不 commit")
+            sys.exit(0)
+    except Exception:
+        pass
+
     asof = dt.datetime.now(dt.timezone.utc).isoformat(timespec="minutes")
     r_short, r_long = live_yf.fetch_yields()
 

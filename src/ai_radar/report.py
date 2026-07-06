@@ -34,6 +34,10 @@ def _fmt_pct(x, digits=3):
     return f"{x:.{digits}%}" if x is not None else "NO_DATA"
 
 
+def _bucket_label(b):
+    return "未歸桶" if b in (None, "NO_DATA") else b
+
+
 def _plain_card(rec) -> list[str]:
     """一位外行人也看得懂的存活者小卡(3–4 行)。"""
     c = rec["card"]
@@ -41,7 +45,7 @@ def _plain_card(rec) -> list[str]:
     per_contract = c["premium"] * 100
     cat_txt = (f"財報/事件 T-{c['catalyst_t_minus']} 天"
                if c["catalyst_t_minus"] is not None else "無近期事件時鐘")
-    L = [f"### {c['ticker']}({c['bucket']}桶)· {lens}",
+    L = [f"### {c['ticker']}({_bucket_label(c['bucket'])}桶)· {lens}",
          f"- 規則挑的合約:**{c['expiry']} 到期、履約價 ${c['strike']:g} 的買權**,"
          f"一張約 **${per_contract:,.0f}**(報價 ${c['premium']}×100)。"]
     if c["lens"] == "convexity":
@@ -62,7 +66,8 @@ def _card_row(rec) -> str:
     cat = f"T-{c['catalyst_t_minus']}" if c["catalyst_t_minus"] is not None else "—"
     scenario = (f"若+{c['target_move_pct']:g}% 內含 {c['multiple_at_target']}×"
                 if c.get("target_move_pct") else "—")
-    return (f"| {c['ticker']} | {c['bucket']}{('/' + c['tier']) if c['tier'] else ''} "
+    return (f"| {c['ticker']} | {_bucket_label(c['bucket'])}"
+            f"{('/' + c['tier']) if c['tier'] else ''} "
             f"| {c['lens']} | {cat} | {c['expiry']} ${c['strike']:g}C "
             f"| ${c['premium']} | {c['delta']} | {c['eff_leverage']}x "
             f"| +{c['breakeven_pct']}% | {scenario} |")
@@ -134,7 +139,7 @@ def render_report(recs, *, asof, r_short=None, r_long=None, r_default=0.045,
         for r in excluded:
             m = r.get("metrics") or {}
             metrics = "、".join(f"{k}={v}" for k, v in m.items() if v is not None) or "—"
-            L.append(f"| {r['ticker']} | {r['bucket']} | {r['route']} | `{r['code']}` "
+            L.append(f"| {r['ticker']} | {_bucket_label(r['bucket'])} | {r['route']} | `{r['code']}` "
                      f"| {CODE_TEXT.get(r['code'], '')} | {metrics} |")
     else:
         L.append("(無)")
