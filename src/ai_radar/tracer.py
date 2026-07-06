@@ -42,6 +42,10 @@ def outcomes(path: str) -> list[dict]:
     return [r for r in read_records(path) if r.get("kind") == "outcome"]
 
 
+def card_tracks(path: str) -> list[dict]:
+    return [r for r in read_records(path) if r.get("kind") == "card_track"]
+
+
 def _scan_date(rec: dict) -> date:
     return datetime.fromisoformat(rec["ts"]).date()
 
@@ -76,6 +80,65 @@ def due_backfills(path: str, today: date, horizons: list[int]) -> list[dict]:
                             "horizon_days": h, "spot_then": s.get("spot"),
                             "option_mid_then": (s.get("card") or {}).get("premium")})
     return due
+
+
+def open_cards(path: str, today: date, stop_before_expiry_days: int = 21) -> list[dict]:
+    """該追蹤的合約卡:曾上榜的每張(ticker, expiry, strike)去重取**第一次**上榜為基準,
+    追到「到期前 N 天」為止(之後 theta 加速,照紀律早該離場,追了只會扭曲統計)。
+    同一天已記過的不重複(冪等)。回傳含回填基準(掛牌價/掛牌日)。
+    """
+    today_iso = today.isoformat()
+    marked = {(c["ticker"], c["expiry"], c["strike"]) for c in card_tracks(path)
+              if str(c.get("ts", ""))[:10] == today_iso}
+    first: dict = {}
+    for s in scans(path):
+        card = s.get("card") or {}
+        if not card.get("expiry"):
+            continue
+        key = (card["ticker"], card["expiry"], card["strike"])
+        if key not in first:
+            first[key] = {"ticker": card["ticker"], "expiry": card["expiry"],
+                          "strike": card["strike"], "lens": card.get("lens"),
+                          "premium_then": card.get("premium"),
+                          "spot_then": card.get("spot"), "scan_ts": s.get("ts")}
+    due = []
+    for key, c in first.items():
+        try:
+            dte_left = (date.fromisoformat(c["expiry"]) - today).days
+        except ValueError:
+            continue
+        if dte_left > stop_before_expiry_days and key not in marked:
+            due.append({**c, "dte_left": dte_left})
+    return due
+
+
+def record_card_track(path: str, card_ref: dict, mid_now, spot_now) -> dict:
+    """記一筆合約卡的市價標記(kind=card_track)。mid 缺 → 報酬 None(NO_DATA)。"""
+    p0 = card_ref.get("premium_then")
+    ret = (round((mid_now / p0 - 1) * 100.0, 1) if p0 and mid_now else None)
+    return append_record(path, {
+        "kind": "card_track", "ticker": card_ref["ticker"],
+        "expiry": card_ref["expiry"], "strike": card_ref["strike"],
+        "scan_ts": card_ref.get("scan_ts"), "premium_then": p0,
+        "mid_now": mid_now, "spot_now": spot_now,
+        "dte_left": card_ref.get("dte_left"), "option_ret_pct": ret})
+
+
+def card_report(path: str) -> list[dict]:
+    """每張追蹤中合約卡的最新標記(掛牌價 → 最新市價,追了幾筆)。"""
+    latest: dict = {}
+    counts: dict = {}
+    for c in card_tracks(path):
+        key = (c["ticker"], c["expiry"], c["strike"])
+        latest[key] = c          # append-only:後者即最新
+        counts[key] = counts.get(key, 0) + 1
+    out = []
+    for key, c in sorted(latest.items()):
+        out.append({"ticker": c["ticker"], "expiry": c["expiry"], "strike": c["strike"],
+                    "premium_then": c["premium_then"], "mid_now": c["mid_now"],
+                    "option_ret_pct": c["option_ret_pct"],
+                    "dte_left": c["dte_left"], "n_marks": counts[key]})
+    return out
 
 
 def _stats(vals: list[float]) -> dict:

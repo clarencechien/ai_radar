@@ -19,7 +19,8 @@ from ai_radar.scan import scan_universe  # noqa: E402
 from ai_radar.router import format_card  # noqa: E402
 from ai_radar.report import render_report  # noqa: E402
 from ai_radar.tracer import (  # noqa: E402
-    record_scan, record_outcome, due_backfills, report, scanned_on)
+    record_scan, record_outcome, due_backfills, report, scanned_on,
+    open_cards, record_card_track, card_report)
 from ai_radar import live_yf  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -177,6 +178,19 @@ if __name__ == "__main__":
         filled += 1
     rep = report(TRACER, CFG["tracer"]["min_samples"])
 
+    # 合約卡追蹤:曾上榜的每張卡,每晚標記市價,追到「到期前 N 天」為止
+    stop_days = CFG["tracer"].get("card_track_stop_before_expiry_days", 21)
+    tracked = 0
+    for c in open_cards(TRACER, TODAY, stop_days):
+        mid_now = live_yf.fetch_option_mid(c["ticker"], c["expiry"], c["strike"])
+        try:
+            spot_now = live_yf.fetch_spot(c["ticker"])
+        except Exception:
+            spot_now = None
+        record_card_track(TRACER, c, mid_now, spot_now)
+        tracked += 1
+    cards_now = card_report(TRACER)
+
     # 人看的報告(上半白話、下半 Details)
     after_iv = series_by_key(IV_HISTORY)
     limbo = sorted(t for t, b in universe if b in ("NO_DATA", "半導體"))
@@ -186,7 +200,8 @@ if __name__ == "__main__":
                        r_default=R_DEFAULT,
                        iv_counts={t: len(v) for t, v in after_iv.items()},
                        ivp_min=CFG["data"]["iv_percentile_min_history_days"],
-                       tracer_report=rep, universe_note=src_note, attention=attention)
+                       tracer_report=rep, universe_note=src_note, attention=attention,
+                       card_tracking=cards_now)
     with open(os.path.join(ROOT, "RADAR.md"), "w", encoding="utf-8") as f:
         f.write(md)
 
@@ -194,6 +209,7 @@ if __name__ == "__main__":
     n_ex = sum(1 for r in recs if not r.get("card") and r["verdict"] != "NO_DATA")
     n_nd = sum(1 for r in recs if r["verdict"] == "NO_DATA")
     print(f"\n存活者 {len(survivors)} / 排除 {n_ex} / NO_DATA {n_nd};"
-          f"tracer 收 {saved} 筆、回填 {filled}/{len(due)} → RADAR.md 已更新")
+          f"tracer 收 {saved} 筆、回填 {filled}/{len(due)}、卡追蹤 {tracked} 張"
+          f" → RADAR.md 已更新")
     for r in survivors:
         print(format_card(r["card"]))

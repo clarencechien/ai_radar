@@ -72,6 +72,23 @@ def is_optionable(t: str) -> bool:
         return False
 
 
+def fetch_option_mid(ticker: str, expiry: str, strike: float):
+    """查特定合約的當前市價(合約卡追蹤用)。盤中 mid、收盤後 lastPrice;缺 → None。"""
+    try:
+        calls = _yf().Ticker(ticker).option_chain(expiry).calls
+        row = calls[calls["strike"] == float(strike)]
+        if row.empty:
+            return None
+        r = row.iloc[0]
+        bid, ask = float(r.get("bid") or 0), float(r.get("ask") or 0)
+        if bid > 0 and ask > 0:
+            return round((bid + ask) / 2, 2)
+        last = float(r.get("lastPrice") or 0)
+        return round(last, 2) if last > 0 else None
+    except Exception:
+        return None
+
+
 def fetch_yields() -> tuple:
     """(短率 ^IRX 13週, 長率 ^FVX 5年),年化小數;抓不到 → None(降級回預設)。"""
     out = []

@@ -146,6 +146,8 @@ ai_radar/
 - **chain 層級 NO_DATA(修正)**:Colab 真實觀察到 Yahoo 時段性整批缺 OI(同日同 spot,前跑過 OI 250 張、後跑 0 張)→ 空 chain 或全 chain OI=0 時透鏡回 `NO_DATA`(`NO_CONTRACTS` / `LIQ_NO_OI_DATA`)而非 EXCLUDE——資料缺失要降級,不是製造假淘汰(承 §6.2 教訓)。
 - ~~**Block 4**:催化劑 helper~~ **已完成(純邏輯已測)**:`catalysts.py`——`next_catalyst()` 挑最近的未來事件(含今天;已過/日期壞 → 無時鐘),`format_clock()` 出 T-N 標記。**lookahead 只標注不裁決**:超過 `catalyst.lookahead_days` 的事件照樣回傳(標 `within_lookahead: false`、印「遠期」),要不要砍遠期時鐘是人的事。live 抓取(yfinance calendar)在 notebook 的 `fetch_earnings_events`。
 - ~~**Block 5**:shadow tracer~~ **已完成(純邏輯已測,收集已開始)**:`tracer.py`——`record_scan()` 收 scan_one 紀錄(存活者含假設卡/排除者含理由/NO_DATA 含原因)、`due_backfills()` 算哪些 (scan, T+N) 到期未回填(冪等)、`record_outcome()` 回填標的(+可選選擇權)報酬、`report()` 雙向報表(PASS 組=放對沒、EXCLUDE:code 組=砍錯沒)。**凍結閾值:未達 min_samples 30 前 `tuning_unlocked: false`;達標後也只產報表,人工週審拍板,tracer 永不自動改 config。** state 檔 `state/tracer.jsonl` 已進版控例外,跑完要 commit 才累積。
+- **合約卡追蹤(2026-07-06 補)**:上過榜的每張卡(以**第一次**上榜的掛牌價為基準)每晚標記實際市價,追到**到期前 21 天**停(`card_track_stop_before_expiry_days`;之後 theta 加速,照紀律早該離場,追了只會扭曲統計)。這校正的是「**造合約規則**」(strike/expiry 挑得好不好);標的 T+N 回填校正的是「**選股排除規則**」(放對/砍錯)——兩條迴路分開量。
+- **關於「歷史回測」**:沒有,免費資料層做不到(yfinance 無歷史 option chain)。設計答案就是 append-only:每晚累積的 scan/card_track/outcome 本身就是在**自建回測資料集**,時間到了自然可回放。
 - **G0 曝險護欄**(客製化,最後做):台積個人總曝險(工作+新台幣資產+部位)超上限就擋;一旦開就常開。put/對沖左尾另議,不在只-call 範圍。
 
 ## 10. 開放問題(落地時順手定)

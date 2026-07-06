@@ -75,7 +75,7 @@ def _card_row(rec) -> str:
 
 def render_report(recs, *, asof, r_short=None, r_long=None, r_default=0.045,
                   iv_counts=None, ivp_min=60, tracer_report=None,
-                  universe_note=None, attention=None) -> str:
+                  universe_note=None, attention=None, card_tracking=None) -> str:
     """組報告。recs = scan_one 紀錄清單;其餘皆選填(缺就不印該段)。"""
     survivors = [r for r in recs if r.get("card")]
     excluded = [r for r in recs if not r.get("card") and r.get("verdict") != "NO_DATA"]
@@ -160,6 +160,17 @@ def render_report(recs, *, asof, r_short=None, r_long=None, r_default=0.045,
         L += [f"- {t}:{n}/{ivp_min} 筆"
               f"{'(已啟用 percentile 閘)' if n >= ivp_min else '(未滿 → edge 閘用 ratio 後備)'}"
               for t, n in sorted(iv_counts.items())]
+
+    if card_tracking:
+        L += ["", f"### 合約卡追蹤({len(card_tracking)} 張,追到到期前 21 天)", "",
+              "上過榜的每張卡,每晚標記市價——校正「造合約規則」用"
+              "(標的 T+N 回填校正的是「選股排除規則」,兩者分開量)。", ""]
+        for c in card_tracking:
+            mark = (f"${c['mid_now']}({c['option_ret_pct']:+.1f}%)"
+                    if c.get("mid_now") is not None else "NO_DATA")
+            L.append(f"- {c['ticker']} {c['expiry']} ${c['strike']:g}C:"
+                     f"掛牌 ${c['premium_then']} → 最新 {mark} · "
+                     f"標記 {c['n_marks']} 筆 · 剩 {c['dte_left']} 天")
 
     if tracer_report:
         tr = tracer_report
