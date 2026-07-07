@@ -90,8 +90,9 @@ def render_report(recs, *, asof, r_short=None, r_long=None, r_default=0.045,
         "",
         "## 今晚結論",
         "",
-        f"掃描 **{len(recs)} 檔** AI 相關股 → 通過濾網 **{len(survivors)} 檔**、"
-        f"排除 **{len(excluded)} 檔**、資料缺失 **{len(no_data)} 檔**。"
+        f"掃描 **{len({r['ticker'] for r in recs})} 檔** AI 相關股"
+        f"(雙透鏡共 {len(recs)} 筆評估)→ 出卡 **{len(survivors)} 張**、"
+        f"排除 **{len(excluded)} 筆**、資料缺失 **{len(no_data)} 筆**。"
         + (f"(宇宙來源:{universe_note})" if universe_note else ""),
         "",
     ]

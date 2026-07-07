@@ -43,7 +43,7 @@ def _fetch_chain(t, S, min_dte, max_dte, otm_only):
     return OTM if otm_only else LEAPS
 
 
-def test_scan_universe_routes_degrades_and_reports():
+def test_scan_universe_dual_lens_degrades_and_reports():
     seen_chains = []
     recs = scan_universe(
         [("NVDA", "加速器"), ("MU", "記憶體"), ("FAR", "設備"), ("BAD", "設備")],
@@ -53,30 +53,35 @@ def test_scan_universe_routes_degrades_and_reports():
         fetch_rv=lambda t: 0.50, rate_for=lambda dte: 0.045,
         on_chain=lambda t, S, c: seen_chains.append(t))
 
-    assert [r["ticker"] for r in recs] == ["NVDA", "MU", "FAR", "BAD"]   # 順序保留
+    # 雙透鏡:每檔 1 筆槓桿;時鐘在走(MU T-30)再加 1 筆凸性。順序保留。
+    assert [(r["ticker"], r["route"]) for r in recs] == [
+        ("NVDA", "leverage"), ("MU", "leverage"), ("MU", "convexity"),
+        ("FAR", "leverage"), ("BAD", None)]
 
-    nvda, mu, far, bad = recs
-    # FAR:財報 T-83 超過 lookahead 60 → 時鐘「現在沒在走」→ 槓桿(預設姿勢);
-    # 否則每檔永遠有下一次財報,凸性會吃掉整個宇宙、槓桿透鏡變死码。
-    assert far["route"] == "leverage" and far["verdict"] == "PASS"
-    assert far["catalyst"]["dte"] == 83 and far["catalyst"]["within_lookahead"] is False
-    # NVDA 無時鐘 → 槓桿 → PASS
-    assert nvda["route"] == "leverage" and nvda["verdict"] == "PASS"
-    assert nvda["catalyst"] is None
-    # MU 財報 T-30 → 凸性 → PASS,催化劑資訊帶在紀錄上
-    assert mu["route"] == "convexity" and mu["verdict"] == "PASS"
-    assert mu["catalyst"]["dte"] == 30 and mu["catalyst"]["kind"] == "earnings"
-    assert mu["card"]["multiple_at_target"] == 18.3
+    nvda, mu_lev, mu_cvx, far, bad = recs
+    # NVDA 無時鐘 → 只有槓桿 → PASS
+    assert nvda["verdict"] == "PASS" and nvda["catalyst"] is None
+    # MU 槓桿照跑(S=1000 下 LEAPS 全深價內 → delta 出帶 → 誠實排除)
+    assert mu_lev["verdict"] == "EXCLUDE" and mu_lev["code"] == "LEV_NO_DELTA"
+    # MU 凸性:財報 T-30 → PASS,催化劑資訊兩筆都帶
+    assert mu_cvx["verdict"] == "PASS"
+    assert mu_cvx["catalyst"]["dte"] == 30 and mu_lev["catalyst"]["dte"] == 30
+    assert mu_cvx["card"]["multiple_at_target"] == 18.3
+    # FAR:T-83 超過 lookahead → 凸性不跑,槓桿照評(不再全盲);遠期時鐘印在卡上
+    assert far["verdict"] == "PASS"
+    assert far["catalyst"]["within_lookahead"] is False
+    assert far["card"]["catalyst_t_minus"] == 83
     # BAD 抓取炸掉 → 降級,不殺整晚
     assert bad["verdict"] == "NO_DATA" and bad["code"] == "FETCH_ERROR"
     assert "ConnectionError" in bad["error"] and bad["card"] is None
 
-    # IV 自舉回呼只在成功抓到 chain 時觸發
+    # IV 自舉回呼:固定收 LEAPS chain(天期一致),每檔一次
     assert seen_chains == ["NVDA", "MU", "FAR"]
 
-    # 報告吃得下整批紀錄(含 FETCH_ERROR 行)
+    # 報告吃得下整批紀錄:4 檔 5 筆、3 張卡、1 筆排除、1 筆缺資料
     md = render_report(recs, asof="2026-07-02T22:00")
-    assert "通過濾網 **3 檔**" in md and "NO_DATA(1)" in md
+    assert "掃描 **4 檔**" in md and "雙透鏡共 5 筆" in md
+    assert "出卡 **3 張**" in md and "NO_DATA(1)" in md
     assert "抓取失敗" in md and "ConnectionError" in md
 
 

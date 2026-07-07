@@ -73,6 +73,16 @@ def test_scan_one_exclude_has_no_card():
     assert rec["card"] is None
 
 
+def test_scan_one_forced_lens_overrides_clock():
+    """雙透鏡並行模式:lens 給定時強制用該透鏡,時鐘只印在卡上不影響評估。"""
+    S, r = 200, 0.045
+    chain = [_mk(150, 550, 62, 0.42), _mk(180, 550, 40, 0.40)]
+    rec = scan_one("NVDA", "加速器", S, r, chain, CFG, lens="leverage",
+                   catalyst_dte=30)   # 預設路由會走凸性;強制槓桿
+    assert rec["route"] == "leverage" and rec["verdict"] == "PASS"
+    assert rec["card"]["catalyst_t_minus"] == 30   # 時鐘照樣印在卡上給人看
+
+
 def test_build_card_non_pass_returns_none():
     assert build_card("X", "設備", {"verdict": "EXCLUDE", "code": "LEV_NO_DELTA"},
                       200, 0.045) is None

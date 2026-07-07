@@ -51,15 +51,15 @@ def _scan_date(rec: dict) -> date:
 
 
 def scanned_on(path: str, day: date) -> dict:
-    """指定日期已收的掃描:{ticker: {verdicts}}。
+    """指定日期已收的掃描:{(ticker, route): {verdicts}}。
 
-    供呼叫端同日去重:已有實判(非 NO_DATA)當日不重收;
-    只有 NO_DATA(時段性缺資料)時,之後盤中補到實判仍可收。
+    供呼叫端同日去重(雙透鏡並行後以「檔×透鏡」為單位):
+    已有實判(非 NO_DATA)當日不重收;只有 NO_DATA 時,盤中補到實判仍可收。
     """
     out: dict = {}
     for s in scans(path):
         if _scan_date(s) == day:
-            out.setdefault(s["ticker"], set()).add(s["verdict"])
+            out.setdefault((s["ticker"], s.get("route")), set()).add(s["verdict"])
     return out
 
 

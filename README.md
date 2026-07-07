@@ -19,7 +19,7 @@
 - [x] **Block 1.5 — 真 ETF 持股** — **Yahoo top10 聯集為正式來源**(本工具獵大象;SMH 前十大=72.5% 資產,長尾歸 `optscnr`),issuer CSV 可選擴充;週更快照進版控;歸桶未決輸出「需人工補 refine」提醒。四檔 ETF 真資料驗證全通。
 - [x] **Block 2 — 雙透鏡** — BSM 自算 Greeks + IV 反解 + 實現波動 + percentile 自舉。純數學已測(對照教科書值)。
 - [x] **Block 2.5 — 真 T-bill 利率 + edge 閘基準改良** — `rates.py` 按天期挑 ^IRX/^FVX;edge 閘改「IV 自身歷史 percentile 優先、ratio 後備」;IV 自舉每晚收樣。真資料已驗(短 3.67%/長 4.23%)。
-- [x] **Block 3 — 路由器 + 造合約** — 論點時鐘路由(60 天內催化劑→凸性、否則→槓桿)+ 條件式單腿 call 合約卡(`router.py`)。兩透鏡都出過真卡;T1 軟催化劑與 tier_map 待補。
+- [x] **Block 3 — 造合約 + 雙透鏡並行** — 槓桿透鏡每檔永遠跑(大象預設姿勢)、凸性透鏡在時鐘 ≤60 天時加跑;同檔可同晚出兩張條件式卡,各自追蹤(`router.py`/`scan.py`)。T1 軟催化劑與 tier_map 待補。
 - [x] **Block 4 — 催化劑 helper** — `catalysts.py` 標時鐘(最近未來事件 → T-N),只呈現不裁決;遠期事件標注不砍。
 - [x] **Block 5 — shadow tracer** — `tracer.py` collect_only:收掃描紀錄 → T+5/10/20 標的回填(校正選股排除)+ **合約卡逐日市價追蹤到期前 21 天**(校正造合約)→ 雙向報表。閾值凍結,min_samples 30 前不解鎖,解鎖後也人工拍板。歷史回測免費資料做不到 → append-only 自建資料集。
 

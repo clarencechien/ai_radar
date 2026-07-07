@@ -158,11 +158,11 @@ if __name__ == "__main__":
             line += f" {rec['code']}"
         print(line)
 
-    # tracer:同日去重(NO_DATA 可被實判蓋過)→ 收 → 回填到期 → 報表
+    # tracer:同日去重(檔×透鏡;NO_DATA 可被實判蓋過)→ 收 → 回填到期 → 報表
     seen = scanned_on(TRACER, TODAY)
     saved = 0
     for rec in recs:
-        vs = seen.get(rec["ticker"])
+        vs = seen.get((rec["ticker"], rec["route"]))
         if vs is None or (rec["verdict"] != "NO_DATA" and vs == {"NO_DATA"}):
             record_scan(TRACER, rec)
             saved += 1
