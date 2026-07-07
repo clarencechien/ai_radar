@@ -60,14 +60,15 @@ def build_card(ticker, bucket, lens_result, S, r, *, tier=None, catalyst_dte=Non
     }
 
 
-def scan_one(ticker, bucket, S, r, contracts, cfg, *, catalyst_dte=None,
+def scan_one(ticker, bucket, S, r, contracts, cfg, *, lens=None, catalyst_dte=None,
              realized_vol_val=None, iv_history=None, tier=None, asof=None) -> dict:
-    """單一標的走完:路由 → 透鏡 → (PASS 時)出卡。
+    """單一標的走完:透鏡 → (PASS 時)出卡。
 
-    回傳掃描紀錄(存活者含 card、排除者含 code),欄位即 tracer 要收的格式
-    (Block 5 collect_only 可直接 append)。
+    lens 給定時強制用該透鏡(雙透鏡並行模式,scan_universe 用);
+    不給則照論點時鐘路由(向後相容)。catalyst_dte 不論哪個透鏡都印在卡上。
+    回傳掃描紀錄(存活者含 card、排除者含 code),欄位即 tracer 要收的格式。
     """
-    lens = route(catalyst_dte)
+    lens = lens or route(catalyst_dte)
     if lens == "convexity":
         res = convexity_lens(contracts, S, r, realized_vol_val, catalyst_dte, cfg,
                              tier=tier, iv_history=iv_history)

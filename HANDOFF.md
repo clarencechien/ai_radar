@@ -142,7 +142,8 @@ ai_radar/
   - 新面孔才做 option 濾網(bucket_map 沒見過的),避免每晚重驗整個宇宙。
   - 「半導體粗桶 limbo」/NO_DATA 歸桶 → RADAR.md Details「需人工處理」段輸出補 refine 提醒。
 - **賽馬 T1/T2 tier_map**:yfinance 分不出 PLTR(T2)vs MSFT/ORCL(T1,都是 "Software - Infrastructure")→ 需手動 tier_map(像 refine)。破壞線**按名不按桶**(賽馬賭哪匹馬贏,是個股特有的事)。
-- ~~**Block 3**:造合約 + **路由器**~~ **已完成(純邏輯已測,Colab 驗證待跑)**:`router.py`——`route()` 論點時鐘(帶日期催化劑→凸性、無/已過→槓桿)、`build_card()` 組 SPEC §6 合約卡(含損益兩平%、G0 bypass 誠實標記、條件式聲明)、`scan_one()` 單標的走完路由→透鏡→出卡,回傳格式即 tracer 要收的紀錄。**待補**:賽馬 T1 軟催化劑(`CVX_SOFT_CATALYST`,需破壞線基建)與 tier_map(見下)。
+- ~~**Block 3**:造合約 + **路由器**~~ **已完成**:`router.py`——`build_card()` 組 SPEC §6 合約卡(含損益兩平%、G0 bypass 誠實標記、條件式聲明)、`scan_one()` 單標的走完透鏡→出卡,回傳格式即 tracer 要收的紀錄。**待補**:賽馬 T1 軟催化劑(`CVX_SOFT_CATALYST`,需破壞線基建)與 tier_map(見下)。
+- **雙透鏡並行(2026-07-07,使用者拍板,回到 §1 原意「同一檔各看一次」)**:原「論點時鐘二選一路由」的實測成本——每家公司永遠有下一次財報,財報進 60 天窗就被路由去凸性再被權利金閘排除,**NVDA/AMD 的槓桿視角整季全盲**(07-02~06 真資料)。改為:**槓桿每檔永遠跑**、**凸性只在時鐘 ≤ lookahead 時加跑**;同檔可同晚出兩張卡(兩種玩法),tracer 以「檔×透鏡」為單位去重與統計。附帶效果:IV 自舉固定收 LEAPS chain 的 ATM IV,序列天期一致(注意:凸性 edge 閘拿短天期事件 IV 對 LEAPS 天期的歷史 percentile 比,是跨期限比較,偏保守——已知限制)。
 - **chain 層級 NO_DATA(修正)**:Colab 真實觀察到 Yahoo 時段性整批缺 OI(同日同 spot,前跑過 OI 250 張、後跑 0 張)→ 空 chain 或全 chain OI=0 時透鏡回 `NO_DATA`(`NO_CONTRACTS` / `LIQ_NO_OI_DATA`)而非 EXCLUDE——資料缺失要降級,不是製造假淘汰(承 §6.2 教訓)。
 - ~~**Block 4**:催化劑 helper~~ **已完成(純邏輯已測)**:`catalysts.py`——`next_catalyst()` 挑最近的未來事件(含今天;已過/日期壞 → 無時鐘),`format_clock()` 出 T-N 標記。**lookahead 只標注不裁決**:超過 `catalyst.lookahead_days` 的事件照樣回傳(標 `within_lookahead: false`、印「遠期」),要不要砍遠期時鐘是人的事。live 抓取(yfinance calendar)在 notebook 的 `fetch_earnings_events`。
 - ~~**Block 5**:shadow tracer~~ **已完成(純邏輯已測,收集已開始)**:`tracer.py`——`record_scan()` 收 scan_one 紀錄(存活者含假設卡/排除者含理由/NO_DATA 含原因)、`due_backfills()` 算哪些 (scan, T+N) 到期未回填(冪等)、`record_outcome()` 回填標的(+可選選擇權)報酬、`report()` 雙向報表(PASS 組=放對沒、EXCLUDE:code 組=砍錯沒)。**凍結閾值:未達 min_samples 30 前 `tuning_unlocked: false`;達標後也只產報表,人工週審拍板,tracer 永不自動改 config。** state 檔 `state/tracer.jsonl` 已進版控例外,跑完要 commit 才累積。
@@ -156,6 +157,10 @@ ai_radar/
 2. 賽馬 T1/T2 各自的按名破壞線清單(指標、資料來源)。
 3. G0 曝險值怎麼估、UI 怎麼填、何時啟用。
 4. tracer 解鎖調參後的調整幅度上限/步長,避免人工過度反應。
+5. 卡追蹤長尾管理:LEAPS 卡會追 ~900 天,每天換挑的卡又各自新開追蹤 → 幾個月後追蹤清單會膨脹。週審時決定退役規則(如:被新卡取代 N 天後停追)。
+6. 雙透鏡後 outcome 計數:同檔同日兩筆紀錄 → T+N 回填也兩筆(各歸自己的透鏡組)。`min_samples 30` 的分母是「檔×透鏡×期」,週審讀數時記得這個單位。
+7. 閘門邊界抖動:MU 三天內 `LEV_NO_DELTA`↔`PASS` 翻兩次(spot 在 delta 帶邊緣晃)。數據夠了考慮遲滯帶。
+8. IV 自舉天期:序列現在固定收 LEAPS ATM IV;凸性 percentile 閘是跨期限比較(偏保守)。若要精確,得另收短天期 IV 序列(每檔兩條)。
 
 ## 11. 給接手 session 的第一個動作
 

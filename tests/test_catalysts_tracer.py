@@ -46,8 +46,8 @@ def test_next_catalyst_lookahead_annotates_not_judges():
 
 
 # ---- Block 5:shadow tracer(collect_only)----
-def _scan(ticker, verdict, code=None, spot=100.0, ts=None, card=None):
-    rec = {"ticker": ticker, "bucket": "測試", "route": "leverage",
+def _scan(ticker, verdict, code=None, spot=100.0, ts=None, card=None, route="leverage"):
+    rec = {"ticker": ticker, "bucket": "測試", "route": route,
            "verdict": verdict, "code": code, "spot": spot, "card": card}
     if ts:
         rec["ts"] = ts
@@ -105,12 +105,16 @@ def test_scanned_on_for_same_day_dedup(tmp_path):
     p = str(tmp_path / "tracer.jsonl")
     record_scan(p, _scan("NVDA", "NO_DATA", code="LIQ_NO_OI_DATA",
                          ts="2026-07-02T10:00:00+00:00"))
-    record_scan(p, _scan("MU", "EXCLUDE", code="CVX_NO_STRIKE",
+    record_scan(p, _scan("MU", "EXCLUDE", code="CVX_NO_STRIKE", route="convexity",
                          ts="2026-07-02T10:00:00+00:00"))
+    record_scan(p, _scan("MU", "PASS", route="leverage",
+                         ts="2026-07-02T10:00:00+00:00"))   # 雙透鏡:同檔不同透鏡並存
     record_scan(p, _scan("MU", "PASS", ts="2026-07-01T21:40:00+00:00"))   # 昨天 → 不算
     seen = scanned_on(p, TODAY)
-    assert seen == {"NVDA": {"NO_DATA"}, "MU": {"EXCLUDE"}}
-    # 呼叫端規則:NVDA 今天只有 NO_DATA → 盤中補到實判可收;MU 已有實判 → 跳過
+    assert seen == {("NVDA", "leverage"): {"NO_DATA"},
+                    ("MU", "convexity"): {"EXCLUDE"},
+                    ("MU", "leverage"): {"PASS"}}
+    # 呼叫端規則:NVDA 槓桿今天只有 NO_DATA → 盤中補到實判可收;MU 兩路都有實判 → 跳過
 
 
 def test_card_tracking_lifecycle(tmp_path):

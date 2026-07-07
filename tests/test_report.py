@@ -43,7 +43,7 @@ def test_render_report_two_tier_layout():
                                                        "max_ret_pct": 8.0}}}})
     # --- 上半:外行人看得懂 ---
     assert "今晚結論" in md
-    assert "通過濾網 **1 檔**" in md and "排除 **1 檔**" in md
+    assert "掃描 **3 檔**" in md and "出卡 **1 張**" in md and "排除 **1 筆**" in md
     assert "ETF 持股(SMH、SOXX;42 檔)" in md            # 宇宙來源
     assert "長期槓桿" in md and "一張約 **$7,712**" in md   # 白話卡:透鏡人話+每張成本
     assert "+20.1%" in md                                    # 損益兩平白話
