@@ -147,3 +147,7 @@
 {"ticker": "CSCO", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Communication Equipment", "ts": "2026-08-19T14:24:19+00:00"}
 {"ticker": "STX", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Computer Hardware", "ts": "2026-08-19T14:24:19+00:00"}
 {"ticker": "WDC", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Computer Hardware", "ts": "2026-08-19T14:24:19+00:00"}
+{"ticker": "AAPL", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Consumer Electronics", "ts": "2026-08-20T14:26:55+00:00"}
+{"ticker": "CSCO", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Communication Equipment", "ts": "2026-08-20T14:26:55+00:00"}
+{"ticker": "STX", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Computer Hardware", "ts": "2026-08-20T14:26:56+00:00"}
+{"ticker": "WDC", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Computer Hardware", "ts": "2026-08-20T14:26:56+00:00"}
