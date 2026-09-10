@@ -203,3 +203,7 @@
 {"ticker": "CSCO", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Communication Equipment", "ts": "2026-09-09T17:27:04+00:00"}
 {"ticker": "STX", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Computer Hardware", "ts": "2026-09-09T17:27:04+00:00"}
 {"ticker": "WDC", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Computer Hardware", "ts": "2026-09-09T17:27:04+00:00"}
+{"ticker": "NFLX", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Entertainment", "ts": "2026-09-10T17:24:38+00:00"}
+{"ticker": "SPCX", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Aerospace & Defense", "ts": "2026-09-10T17:24:38+00:00"}
+{"ticker": "STX", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Computer Hardware", "ts": "2026-09-10T17:24:39+00:00"}
+{"ticker": "TSLA", "bucket": "NO_DATA", "source": "NO_DATA", "gics_sub": "Auto Manufacturers", "ts": "2026-09-10T17:24:39+00:00"}
