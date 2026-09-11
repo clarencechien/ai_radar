@@ -82,10 +82,21 @@ def due_backfills(path: str, today: date, horizons: list[int]) -> list[dict]:
     return due
 
 
-def open_cards(path: str, today: date, stop_before_expiry_days: int = 21) -> list[dict]:
+def _stop_days_for(lens, stop_before_expiry_days) -> int:
+    """停追天數:int → 全透鏡同值;dict → 依透鏡各設(缺的透鏡退 21)。
+
+    凸性卡的到期在催化劑後 0–55 天,統一 21 天等於事件永遠在盲區(MEASURE.md §2.1)
+    → 凸性預設 0(追到到期日),槓桿維持 21(theta 加速前離場)。
+    """
+    if isinstance(stop_before_expiry_days, dict):
+        return int(stop_before_expiry_days.get(lens, 21))
+    return int(stop_before_expiry_days)
+
+
+def open_cards(path: str, today: date, stop_before_expiry_days=21) -> list[dict]:
     """該追蹤的合約卡:曾上榜的每張(ticker, expiry, strike)去重取**第一次**上榜為基準,
-    追到「到期前 N 天」為止(之後 theta 加速,照紀律早該離場,追了只會扭曲統計)。
-    同一天已記過的不重複(冪等)。回傳含回填基準(掛牌價/掛牌日)。
+    追到「到期前 N 天」為止(N 可依透鏡各設;凸性 0 = 追到到期日,才量得到事件)。
+    同一天已記過的不重複(冪等)。回傳含回填基準(掛牌價/掛牌日/催化劑日)。
     """
     today_iso = today.isoformat()
     marked = {(c["ticker"], c["expiry"], c["strike"]) for c in card_tracks(path)
@@ -98,30 +109,55 @@ def open_cards(path: str, today: date, stop_before_expiry_days: int = 21) -> lis
         key = (card["ticker"], card["expiry"], card["strike"])
         if key not in first:
             first[key] = {"ticker": card["ticker"], "expiry": card["expiry"],
-                          "strike": card["strike"], "lens": card.get("lens"),
+                          "strike": card["strike"], "lens": card.get("lens") or s.get("route"),
                           "premium_then": card.get("premium"),
-                          "spot_then": card.get("spot"), "scan_ts": s.get("ts")}
+                          "spot_then": card.get("spot"), "scan_ts": s.get("ts"),
+                          "catalyst_date": (s.get("catalyst") or {}).get("date")}
     due = []
     for key, c in first.items():
         try:
             dte_left = (date.fromisoformat(c["expiry"]) - today).days
         except ValueError:
             continue
-        if dte_left > stop_before_expiry_days and key not in marked:
+        stop = _stop_days_for(c["lens"], stop_before_expiry_days)
+        if dte_left > stop and key not in marked:
             due.append({**c, "dte_left": dte_left})
     return due
 
 
-def record_card_track(path: str, card_ref: dict, mid_now, spot_now) -> dict:
-    """記一筆合約卡的市價標記(kind=card_track)。mid 缺 → 報酬 None(NO_DATA)。"""
+def record_card_track(path: str, card_ref: dict, mid_now, spot_now,
+                      bid_now=None, ask_now=None, iv_now=None) -> dict:
+    """記一筆合約卡的市價標記(kind=card_track)。mid 缺 → 報酬 None(NO_DATA)。
+
+    bid/ask/iv_now 選填:模擬帳本用 bid 出場算成本、用 iv_now 拆 vega 貢獻;
+    缺就 None(舊紀錄沒有這三欄,帳本對它們只算 mid→mid)。
+    """
     p0 = card_ref.get("premium_then")
     ret = (round((mid_now / p0 - 1) * 100.0, 1) if p0 and mid_now else None)
     return append_record(path, {
         "kind": "card_track", "ticker": card_ref["ticker"],
         "expiry": card_ref["expiry"], "strike": card_ref["strike"],
+        "lens": card_ref.get("lens"), "catalyst_date": card_ref.get("catalyst_date"),
         "scan_ts": card_ref.get("scan_ts"), "premium_then": p0,
-        "mid_now": mid_now, "spot_now": spot_now,
-        "dte_left": card_ref.get("dte_left"), "option_ret_pct": ret})
+        "mid_now": mid_now, "bid_now": bid_now, "ask_now": ask_now, "iv_now": iv_now,
+        "spot_now": spot_now, "dte_left": card_ref.get("dte_left"),
+        "option_ret_pct": ret})
+
+
+def record_bench(path: str, today: date, quotes: dict) -> dict | None:
+    """每晚一筆基準收盤(kind=bench,如 {"SMH": 312.1, "SPY": 640.2});同日冪等。
+
+    模擬帳本拿它算「同期間買 SMH」的對照(MEASURE.md §2.3)。缺值存 None(NO_DATA)。
+    """
+    today_iso = today.isoformat()
+    for b in benches(path):
+        if str(b.get("ts", ""))[:10] == today_iso:
+            return None
+    return append_record(path, {"kind": "bench", "quotes": dict(quotes)})
+
+
+def benches(path: str) -> list[dict]:
+    return [r for r in read_records(path) if r.get("kind") == "bench"]
 
 
 def card_report(path: str) -> list[dict]:

@@ -50,7 +50,8 @@
 
 ```
 ai_radar/
-  SPEC.md                       完整設計(v0.4 + 附錄 v0.4.1/v0.4.2 實作紀錄)
+  SPEC.md                       完整設計(v0.4 + 附錄 v0.4.1–v0.4.4 實作紀錄)
+  MEASURE.md                    量測基準(2026-09-11)+ 一個月後對照表(★ 判斷有沒有 edge 的量尺)
   README.md                     進度 + 跑法
   HANDOFF.md                    本檔
   RADAR.md                      ★ 每晚自動生成的人讀報告(上半白話、下半 Details)
@@ -73,11 +74,15 @@ ai_radar/
     etf_holdings.py             Block 1.5 發行商 CSV 解析 + 快照時效(純邏輯)
     live_yf.py                  yfinance live 轉接層(延遲載入,離線 import 不炸)
     catalysts.py                Block 4 催化劑 helper(標時鐘,只呈現不裁決)
-    tracer.py                   Block 5 shadow tracer(collect_only + T+N 回填 + 雙向報表)
+    tracer.py                   Block 5 shadow tracer(collect_only + T+N 回填 + 雙向報表;依透鏡停追、bench)
+    measure.py                  Block 6 量測:PASS/EXCLUDE vs 全宇宙、n_eff、卡報酬、substitute gap、凸性事件覆蓋、IV 走勢
+    paper.py                    Block 6 模擬帳本:由 state 推導(進場/出場規則、ask→bid、delta/vega/theta 拆解、SMH 對照)
+    regime.py                   Block 6 regime 觀察欄位(IV 水位/變化、籃子 20/60 日報酬;只記錄不裁決)
   notebooks/
     colab_verify_block1.py      Block 1 live 驗證(需 Colab)
     colab_verify_block2.py      Block 2 live 驗證(需 Colab,含診斷;開發除錯用)
-    nightly_scan.py             ★ 正式 nightly 進入點:全宇宙掃描 → tracer → RADAR.md(含休市守門)
+    nightly_scan.py             ★ 正式 nightly 進入點:全宇宙掃描 → tracer → 卡標記(bid/ask/IV)→ bench → regime → 模擬帳本 → RADAR.md
+    measure.py                  離線量測 CLI(只讀 state;一個月後對照 MEASURE.md)
   state/                        append-only;iv_history/tracer/bucket_map/universe 四檔進版控
   tests/
     test_universe.py            Block 1 純邏輯
@@ -90,6 +95,8 @@ ai_radar/
     test_scan.py                產線 scan_universe(路由分流/降級/回呼)
     test_report.py              RADAR.md 兩段式渲染
     test_e2e_offline.py         合成資料端到端(宇宙→…→tracer 報表)
+    test_measure.py             Block 6 量測
+    test_paper_regime.py        Block 6 模擬帳本 + regime + 依透鏡停追 + bench
   .github/workflows/test.yml    CI 純邏輯+合成 e2e 回歸(push/PR/手動)
   .github/workflows/nightly-live.yml  台灣 22:00 平日夜跑 live 掃描,state 樣本自動 commit 回 main(冬令要改 cron,見檔內註解)
 ```
@@ -151,6 +158,13 @@ ai_radar/
 - **關於「歷史回測」**:沒有,免費資料層做不到(yfinance 無歷史 option chain)。設計答案就是 append-only:每晚累積的 scan/card_track/outcome 本身就是在**自建回測資料集**,時間到了自然可回放。
 - **G0 曝險護欄**(客製化,最後做):台積個人總曝險(工作+新台幣資產+部位)超上限就擋;一旦開就常開。put/對沖左尾另議,不在只-call 範圍。
 
+- **Block 6 量測 + 模擬帳本(2026-09-11,使用者拍板「先進版控、再改;模擬交易自動跑一個月、要有記錄、之後量測」)**:
+  - 量測結論(`MEASURE.md` §1):槓桿卡 111 張標的均漲 +2.95% 但卡 −1.3%,substitute gap −6.7 點、85% 為負;籃子 IV 0.70→0.51;凸性卡 45 張只有 4 張追蹤跨過催化劑日;PASS−全宇宙 T+20 +2.9 點但拆 regime 後零差距;短窗動能當順風燈在這段是反的。
+  - 帳本修正(記錄規則,非閾值):`open_cards` 停追依透鏡各設(config `card_track_stop_before_expiry_days_by_lens`:槓桿 21、凸性 0);標記加 `bid_now/ask_now/iv_now/lens/catalyst_date`;卡加 `iv/vega/theta_day/bid/ask`;每晚 `bench`(SMH/SPY)與 `regime` 紀錄進 tracer.jsonl(同檔,append-only)。
+  - 模擬帳本 `paper.py` 是**推導**不是第二份狀態:進場=第一次上榜(有 ask 用 ask);槓桿 CLOSED=距到期 ≤21 天(追蹤已結束)、凸性 CLOSED=催化劑後第一筆標記;CENSORED=舊規則在事件前停追(不計分);清算價有 bid 用 bid。
+  - **regime 只記錄不裁決**:兩季後拿條件式報酬決定要不要當閘。不要拿 10 日動能當閘(樣本顯示均值回歸)。
+  - 一個月後:`python notebooks/measure.py` 填 `MEASURE.md` §3;n_eff < 20 的欄位當雜訊。
+
 ## 10. 開放問題(落地時順手定)
 
 1. `gics_map` / `refine` 的完整 seed(目前夠用,擴宇宙時補)。
@@ -166,7 +180,7 @@ ai_radar/
 
 ```bash
 pip install -r requirements.txt
-python -m pytest tests/ -v      # 應 54 passed(純邏輯 + 合成資料端到端)
+python -m pytest tests/ -v      # 應 72 passed(純邏輯 + 合成資料端到端)
 ```
 
 系統已上線自主運轉,接手前先弄清楚現場:

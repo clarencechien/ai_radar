@@ -80,3 +80,40 @@ def test_render_report_convexity_plain_card():
     assert "**18.3 倍**" in md and "輸的上限就是那一張的錢" in md
     # 技術表照舊
     assert "若+30% 內含 18.3×" in md
+
+
+def test_render_report_regime_line_and_paper_section():
+    book = {"stop_days": 21, "bench_symbol": "SMH", "positions": [],
+            "summary": {"leverage": {"n": 3, "scored": 3, "n_eff": 2,
+                                     "by_status": {"OPEN": 3},
+                                     "mean_ret_mid_pct": -1.3, "median_ret_mid_pct": -2.4,
+                                     "win_pct": 43.2, "pnl_usd_sum": -3600.0,
+                                     "ret_cost_pct_mean": None, "ret_cost_pct_n": 0,
+                                     "underlying_ret_pct_mean": 2.9, "underlying_ret_pct_n": 3,
+                                     "substitute_gap_mean": -6.7, "substitute_gap_n": 3,
+                                     "bench_ret_pct_mean": None, "bench_ret_pct_n": 0,
+                                     "attribution_sum": {"delta": 12.0, "vega": -9.5,
+                                                         "theta": -1.0, "residual": 0.5},
+                                     "attribution_n": 3},
+                        "convexity": {"n": 2, "scored": 1, "n_eff": 1,
+                                      "by_status": {"CLOSED": 1, "CENSORED": 1},
+                                      "mean_ret_mid_pct": -54.6, "median_ret_mid_pct": -54.6,
+                                      "win_pct": 0.0, "pnl_usd_sum": -800.0,
+                                      "ret_cost_pct_mean": None, "ret_cost_pct_n": 0,
+                                      "underlying_ret_pct_mean": 3.3, "underlying_ret_pct_n": 1,
+                                      "substitute_gap_mean": -67.3, "substitute_gap_n": 1,
+                                      "bench_ret_pct_mean": 1.2, "bench_ret_pct_n": 1,
+                                      "post_event_n": 1, "post_event_mean_ret_pct": -54.6,
+                                      "post_event_win_pct": 0.0}}}
+    md = render_report([_pass_rec()], asof="x",
+                       regime_line="regime(觀察欄位,不裁決):籃子 IV 0.509(20 日 -8.0%)",
+                       paper_book=book,
+                       card_tracking=[{"ticker": "NVDA", "expiry": "2028-12-15", "strike": 160.0,
+                                       "premium_then": 77.12, "mid_now": 80.0,
+                                       "option_ret_pct": 3.7, "dte_left": 800, "n_marks": 3}])
+    assert "觀察欄位,不裁決" in md
+    assert md.index("regime") < md.index("## Details")          # 印在上半
+    assert "模擬帳本" in md and "無真實部位" in md
+    assert "substitute gap -6.7 點" in md and "vega -9.50" in md
+    assert "post-event" in md and "CENSORED 1" in md
+    assert "凸性追到到期日" in md

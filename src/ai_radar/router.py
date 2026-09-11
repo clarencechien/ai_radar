@@ -48,7 +48,12 @@ def build_card(ticker, bucket, lens_result, S, r, *, tier=None, catalyst_dte=Non
         "catalyst_t_minus": catalyst_dte,
         "expiry": c.get("expiry"), "dte": dte, "strike": K,
         "premium": round(mid, 2),
+        "bid": round(c.get("bid") or 0.0, 2), "ask": round(c.get("ask") or 0.0, 2),
         "delta": round(g["delta"], 3),
+        # 進場 greeks/IV:模擬帳本拆 delta/vega/theta 貢獻用(MEASURE.md §2)
+        "iv": round(c["iv"], 4),
+        "vega": round(g["vega"], 4),          # 每 1% vol
+        "theta_day": round(g["theta"], 4),    # 每日
         "extrinsic": round(max(mid - intrinsic, 0.0), 2),
         "eff_leverage": round(S / mid * g["delta"], 2),
         "breakeven_pct": round((K + mid) / S * 100.0 - 100.0, 1),
