@@ -52,6 +52,9 @@ def test_scan_one_leverage_route_builds_card():
     assert "非建議" in card["note"]
     assert card["asof"] == "2026-07-02T21:40"
     assert card["ticker"] in format_card(card)  # 可印,不炸
+    # 進場 greeks/IV/bid/ask:模擬帳本拆 delta/vega/theta 與算真實成本用(缺 bid/ask → 0)
+    assert card["iv"] > 0 and card["vega"] > 0 and card["theta_day"] < 0
+    assert card["bid"] == 0.0 and card["ask"] == 0.0
 
 
 def test_scan_one_convexity_route_builds_card():

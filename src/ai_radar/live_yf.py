@@ -72,8 +72,12 @@ def is_optionable(t: str) -> bool:
         return False
 
 
-def fetch_option_mid(ticker: str, expiry: str, strike: float):
-    """查特定合約的當前市價(合約卡追蹤用)。盤中 mid、收盤後 lastPrice;缺 → None。"""
+def fetch_option_quote(ticker: str, expiry: str, strike: float) -> dict | None:
+    """查特定合約的當前報價(合約卡追蹤用):{mid, bid, ask, last}。
+
+    盤中 mid=(bid+ask)/2;收盤後 bid/ask 空 → mid 退 lastPrice。找不到/抓不到 → None。
+    bid/ask 另外回傳:模擬帳本用 ask 進、bid 出算真實成本(缺 → 0)。
+    """
     try:
         calls = _yf().Ticker(ticker).option_chain(expiry).calls
         row = calls[calls["strike"] == float(strike)]
@@ -81,12 +85,22 @@ def fetch_option_mid(ticker: str, expiry: str, strike: float):
             return None
         r = row.iloc[0]
         bid, ask = float(r.get("bid") or 0), float(r.get("ask") or 0)
-        if bid > 0 and ask > 0:
-            return round((bid + ask) / 2, 2)
         last = float(r.get("lastPrice") or 0)
-        return round(last, 2) if last > 0 else None
+        if bid > 0 and ask > 0:
+            mid = round((bid + ask) / 2, 2)
+        elif last > 0:
+            mid = round(last, 2)
+        else:
+            return None
+        return {"mid": mid, "bid": round(bid, 2), "ask": round(ask, 2), "last": round(last, 2)}
     except Exception:
         return None
+
+
+def fetch_option_mid(ticker: str, expiry: str, strike: float):
+    """向後相容:只要 mid。"""
+    q = fetch_option_quote(ticker, expiry, strike)
+    return q["mid"] if q else None
 
 
 def fetch_yields() -> tuple:

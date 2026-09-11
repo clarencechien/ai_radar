@@ -34,6 +34,12 @@ def _fmt_pct(x, digits=3):
     return f"{x:.{digits}%}" if x is not None else "NO_DATA"
 
 
+def _pm(x, unit="%", digits=1, signed=True):
+    if x is None:
+        return "—"
+    return f"{x:+.{digits}f}{unit}" if signed else f"{x:.{digits}f}{unit}"
+
+
 def _bucket_label(b):
     return "未歸桶" if b in (None, "NO_DATA") else b
 
@@ -75,8 +81,13 @@ def _card_row(rec) -> str:
 
 def render_report(recs, *, asof, r_short=None, r_long=None, r_default=0.045,
                   iv_counts=None, ivp_min=60, tracer_report=None,
-                  universe_note=None, attention=None, card_tracking=None) -> str:
-    """組報告。recs = scan_one 紀錄清單;其餘皆選填(缺就不印該段)。"""
+                  universe_note=None, attention=None, card_tracking=None,
+                  regime_line=None, paper_book=None) -> str:
+    """組報告。recs = scan_one 紀錄清單;其餘皆選填(缺就不印該段)。
+
+    regime_line:regime.describe() 的一行(觀察欄位,印在今晚結論上方)。
+    paper_book:paper.paper_book() 的結果(模擬帳本段,Details 內)。
+    """
     survivors = [r for r in recs if r.get("card")]
     excluded = [r for r in recs if not r.get("card") and r.get("verdict") != "NO_DATA"]
     no_data = [r for r in recs if r.get("verdict") == "NO_DATA"]
@@ -96,6 +107,8 @@ def render_report(recs, *, asof, r_short=None, r_long=None, r_default=0.045,
         + (f"(宇宙來源:{universe_note})" if universe_note else ""),
         "",
     ]
+    if regime_line:
+        L += [f"> {regime_line}", ""]
     if survivors:
         L += ["以下每檔附「若要動手,規則會挑哪一張合約」——**是條件式答案,不是買進訊號**:", ""]
         for r in survivors:
@@ -163,8 +176,8 @@ def render_report(recs, *, asof, r_short=None, r_long=None, r_default=0.045,
               for t, n in sorted(iv_counts.items())]
 
     if card_tracking:
-        L += ["", f"### 合約卡追蹤({len(card_tracking)} 張,追到到期前 21 天)", "",
-              "上過榜的每張卡,每晚標記市價——校正「造合約規則」用"
+        L += ["", f"### 合約卡追蹤({len(card_tracking)} 張;槓桿追到到期前 21 天、凸性追到到期日)", "",
+              "上過榜的每張卡,每晚標記市價(含 bid/ask/IV)——校正「造合約規則」用"
               "(標的 T+N 回填校正的是「選股排除規則」,兩者分開量)。", ""]
         for c in card_tracking:
             mark = (f"${c['mid_now']}({c['option_ret_pct']:+.1f}%)"
@@ -172,6 +185,31 @@ def render_report(recs, *, asof, r_short=None, r_long=None, r_default=0.045,
             L.append(f"- {c['ticker']} {c['expiry']} ${c['strike']:g}C:"
                      f"掛牌 ${c['premium_then']} → 最新 {mark} · "
                      f"標記 {c['n_marks']} 筆 · 剩 {c['dte_left']} 天")
+
+    if paper_book:
+        L += ["", "### 模擬帳本(paper;由 state 推導,無真實部位)", "",
+              f"進場=第一次上榜(有 ask 用 ask);出場=槓桿剩 ≤{paper_book.get('stop_days', 21)} 天、"
+              "凸性催化劑後第一筆標記;OPEN 以最新 mid 估值;CENSORED=舊規則在事件前停追,不計分。"
+              f"對照 {paper_book.get('bench_symbol', 'SMH')} 同期。", ""]
+        for lens, d in sorted((paper_book.get("summary") or {}).items()):
+            st_txt = "、".join(f"{k} {v}" for k, v in sorted(d["by_status"].items()))
+            L.append(f"- **{LENS_PLAIN.get(lens, lens)}**:{d['n']} 張(計分 {d['scored']}、"
+                     f"n_eff {d['n_eff']};{st_txt})· mid→mid 平均 {_pm(d['mean_ret_mid_pct'])}、"
+                     f"中位 {_pm(d['median_ret_mid_pct'])}、勝率 {_pm(d['win_pct'], '%', 1, False)}"
+                     f"、每張合計 ${(d['pnl_usd_sum'] or 0):,.0f}")
+            L.append(f"  - 成本基準(ask→bid,n={d['ret_cost_pct_n']}){_pm(d['ret_cost_pct_mean'])}"
+                     f" · 標的同期 {_pm(d['underlying_ret_pct_mean'])}"
+                     f" · substitute gap {_pm(d['substitute_gap_mean'], ' 點')}"
+                     f" · {paper_book.get('bench_symbol', 'SMH')} 同期 {_pm(d['bench_ret_pct_mean'])}"
+                     f"(n={d['bench_ret_pct_n']})")
+            if d.get("attribution_sum"):
+                a = d["attribution_sum"]
+                L.append(f"  - 貢獻拆解(n={d['attribution_n']},每股 $):delta {a['delta']:+.2f}、"
+                         f"vega {a['vega']:+.2f}、theta {a['theta']:+.2f}、殘差 {a['residual']:+.2f}")
+            if lens == "convexity":
+                L.append(f"  - 事件後出場(post-event):n={d['post_event_n']}、"
+                         f"平均 {_pm(d['post_event_mean_ret_pct'])}、"
+                         f"勝率 {_pm(d['post_event_win_pct'], '%', 1, False)}")
 
     if tracer_report:
         tr = tracer_report

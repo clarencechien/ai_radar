@@ -20,8 +20,10 @@ from ai_radar.router import format_card  # noqa: E402
 from ai_radar.report import render_report  # noqa: E402
 from ai_radar.tracer import (  # noqa: E402
     record_scan, record_outcome, due_backfills, report, scanned_on,
-    open_cards, record_card_track, card_report)
-from ai_radar import live_yf  # noqa: E402
+    open_cards, record_card_track, card_report, record_bench)
+from ai_radar.regime import basket_iv_regime, basket_price_regime, describe  # noqa: E402
+from ai_radar.paper import paper_book  # noqa: E402
+from ai_radar import bsm, live_yf  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 CFG = load_json(os.path.join(ROOT, "config", "config.json"))
@@ -178,21 +180,52 @@ if __name__ == "__main__":
         filled += 1
     rep = report(TRACER, CFG["tracer"]["min_samples"])
 
-    # 合約卡追蹤:曾上榜的每張卡,每晚標記市價,追到「到期前 N 天」為止
-    stop_days = CFG["tracer"].get("card_track_stop_before_expiry_days", 21)
+    # 合約卡追蹤:曾上榜的每張卡,每晚標記市價(含 bid/ask/IV),
+    # 停追天數依透鏡各設(槓桿 21、凸性 0=追到到期日,才量得到事件;MEASURE.md §2.1)
+    stop_days = CFG["tracer"].get("card_track_stop_before_expiry_days_by_lens",
+                                  CFG["tracer"].get("card_track_stop_before_expiry_days", 21))
     tracked = 0
+    spot_cache = {}
     for c in open_cards(TRACER, TODAY, stop_days):
-        mid_now = live_yf.fetch_option_mid(c["ticker"], c["expiry"], c["strike"])
-        try:
-            spot_now = live_yf.fetch_spot(c["ticker"])
-        except Exception:
-            spot_now = None
-        record_card_track(TRACER, c, mid_now, spot_now)
+        q = live_yf.fetch_option_quote(c["ticker"], c["expiry"], c["strike"]) or {}
+        mid_now = q.get("mid")
+        if c["ticker"] not in spot_cache:
+            try:
+                spot_cache[c["ticker"]] = live_yf.fetch_spot(c["ticker"])
+            except Exception:
+                spot_cache[c["ticker"]] = None
+        spot_now = spot_cache[c["ticker"]]
+        iv_now = None
+        if mid_now and spot_now and c["dte_left"] > 0:
+            iv_now = bsm.implied_vol(mid_now, spot_now, c["strike"], c["dte_left"] / 365.0,
+                                     rate_for(c["dte_left"]))
+            iv_now = round(iv_now, 4) if iv_now is not None else None
+        record_card_track(TRACER, c, mid_now, spot_now,
+                          bid_now=q.get("bid") or None, ask_now=q.get("ask") or None,
+                          iv_now=iv_now)
         tracked += 1
     cards_now = card_report(TRACER)
 
-    # 人看的報告(上半白話、下半 Details)
+    # 基準收盤(模擬帳本對照用;抓不到存 None = NO_DATA)
+    bench_quotes = {}
+    for sym in ("SMH", "SPY"):
+        try:
+            bench_quotes[sym] = round(live_yf.fetch_spot(sym), 2)
+        except Exception:
+            bench_quotes[sym] = None
+    record_bench(TRACER, TODAY, bench_quotes)
+
+    # regime 觀察欄位(只記錄不裁決;MEASURE.md §4):籃子 IV 水位/變化 + 籃子 20/60 日報酬
     after_iv = series_by_key(IV_HISTORY)
+    iv_reg = basket_iv_regime(after_iv, lookback=20,
+                              min_history=CFG["data"]["iv_percentile_min_history_days"])
+    all_recs = list(read_records(TRACER))
+    px_reg = basket_price_regime([r for r in all_recs if r.get("kind") == "scan"])
+    regime_line = describe(iv_reg, px_reg)
+    append_record(TRACER, {"kind": "regime", "iv": iv_reg, "price": px_reg})
+    book = paper_book(all_recs, today=TODAY)
+
+    # 人看的報告(上半白話、下半 Details)
     limbo = sorted(t for t, b in universe if b in ("NO_DATA", "半導體"))
     attention = ([f"歸桶未決(粗桶/NO_DATA),請補 config/refine.json:{'、'.join(limbo)}"]
                  if limbo else None)
@@ -201,7 +234,7 @@ if __name__ == "__main__":
                        iv_counts={t: len(v) for t, v in after_iv.items()},
                        ivp_min=CFG["data"]["iv_percentile_min_history_days"],
                        tracer_report=rep, universe_note=src_note, attention=attention,
-                       card_tracking=cards_now)
+                       card_tracking=cards_now, regime_line=regime_line, paper_book=book)
     with open(os.path.join(ROOT, "RADAR.md"), "w", encoding="utf-8") as f:
         f.write(md)
 
@@ -211,5 +244,6 @@ if __name__ == "__main__":
     print(f"\n存活者 {len(survivors)} / 排除 {n_ex} / NO_DATA {n_nd};"
           f"tracer 收 {saved} 筆、回填 {filled}/{len(due)}、卡追蹤 {tracked} 張"
           f" → RADAR.md 已更新")
+    print(regime_line)
     for r in survivors:
         print(format_card(r["card"]))
