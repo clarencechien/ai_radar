@@ -50,6 +50,8 @@
 
 **解讀規則**:兩季內任何「有 edge」的結論都要能通過「換一段 regime 還在嗎」;n_eff < 20 的欄位一律當雜訊。
 
+**交易時段(2026-09-11 起記錄)**:GitHub 排程實測延遲 1–9 小時,8/27、8/28 拖到美東收盤後才跑(bid/ask 空退 lastPrice)。每筆 scan / card_track / bench 現在都記 `session`(intraday / after_close / pre_open);`measure.py` 第一段印分佈。量測時 after_close 樣本先分開看,不要跟盤中混。cron 已改非整點(14:23 UTC);11/1 冬令後要改 15:23。
+
 ## 4. 之後才做(收滿資料前不動)
 
 - 順風/逆風指標**當閘**:先只當觀察欄位(`regime` 紀錄每晚記 IV 水位、20 日 IV 變化、籃子 20/60 日報酬與漲家數),兩季後用 tracer 條件式報酬決定要不要當閘、要不要只打順風球。

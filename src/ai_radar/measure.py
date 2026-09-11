@@ -251,8 +251,22 @@ def regime_prototype(records, horizons=(10, 20), window=10, min_history=35) -> d
             "days_by_label": dict(n_lab), "conditional": cond}
 
 
+def session_breakdown(records) -> dict:
+    """每種紀錄的 session 分佈(intraday/after_close/pre_open/None=未標記的舊紀錄)。
+
+    GitHub 排程延遲會把收盤後樣本混進來;這段讓量測時知道混了多少。
+    """
+    out = defaultdict(lambda: defaultdict(int))
+    for r in records:
+        k = r.get("kind")
+        if k in ("scan", "card_track", "bench"):
+            out[k][str(r.get("session"))] += 1
+    return {k: dict(v) for k, v in out.items()}
+
+
 def measure_all(records, iv_records, horizons=(5, 10, 20)) -> dict:
-    return {"verdict": verdict_table(records, horizons),
+    return {"session": session_breakdown(records),
+            "verdict": verdict_table(records, horizons),
             "cards": card_returns_by_lens(records),
             "cvx_coverage": convexity_event_coverage(records),
             "iv": iv_trend(iv_records),
@@ -266,7 +280,10 @@ def _fmt_stats(s: dict) -> str:
 
 def render_text(m: dict) -> str:
     """CLI 用的人讀文字。"""
-    L = ["== 濾網:PASS vs EXCLUDE vs 全宇宙(標的報酬)"]
+    L = ["== 樣本的交易時段(None = 2026-09-11 前未標記)"]
+    for k, v in sorted(m.get("session", {}).items()):
+        L.append(f"  {k:10s} " + "、".join(f"{s}={n}" for s, n in sorted(v.items())))
+    L += ["", "== 濾網:PASS vs EXCLUDE vs 全宇宙(標的報酬)"]
     for h, row in m["verdict"].items():
         L.append(f"[{h}]")
         for v in ("PASS", "EXCLUDE"):

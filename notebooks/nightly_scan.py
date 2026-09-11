@@ -20,7 +20,8 @@ from ai_radar.router import format_card  # noqa: E402
 from ai_radar.report import render_report  # noqa: E402
 from ai_radar.tracer import (  # noqa: E402
     record_scan, record_outcome, due_backfills, report, scanned_on,
-    open_cards, record_card_track, card_report, record_bench)
+    open_cards, record_card_track, card_report, record_bench, record_regime)
+from ai_radar.session import market_session  # noqa: E402
 from ai_radar.regime import basket_iv_regime, basket_price_regime, describe  # noqa: E402
 from ai_radar.paper import paper_book  # noqa: E402
 from ai_radar import bsm, live_yf  # noqa: E402
@@ -132,7 +133,10 @@ if __name__ == "__main__":
     except Exception:
         pass
 
-    asof = dt.datetime.now(dt.timezone.utc).isoformat(timespec="minutes")
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    asof = now_utc.isoformat(timespec="minutes")
+    # 交易時段標記:GitHub 排程會延遲(實測拖到收盤後),樣本要標清楚才分得開
+    session = market_session(now_utc)
     r_short, r_long = live_yf.fetch_yields()
 
     def rate_for(dte):
@@ -140,7 +144,7 @@ if __name__ == "__main__":
 
     universe, src_note = resolve_universe()
     fmt = lambda x: f"{x:.3%}" if x is not None else "NO_DATA"  # noqa: E731
-    print(f"AI Radar nightly scan · {asof} · 宇宙 {len(universe)} 檔 · 來源:{src_note}")
+    print(f"AI Radar nightly scan · {asof} · session={session} · 宇宙 {len(universe)} 檔 · 來源:{src_note}")
     print(f"無風險利率:短 {fmt(r_short)} / 長 {fmt(r_long)}(缺→{R_DEFAULT:.2%})")
 
     iv_hist = series_by_key(IV_HISTORY)
@@ -164,6 +168,7 @@ if __name__ == "__main__":
     seen = scanned_on(TRACER, TODAY)
     saved = 0
     for rec in recs:
+        rec["session"] = session
         vs = seen.get((rec["ticker"], rec["route"]))
         if vs is None or (rec["verdict"] != "NO_DATA" and vs == {"NO_DATA"}):
             record_scan(TRACER, rec)
@@ -200,6 +205,7 @@ if __name__ == "__main__":
             iv_now = bsm.implied_vol(mid_now, spot_now, c["strike"], c["dte_left"] / 365.0,
                                      rate_for(c["dte_left"]))
             iv_now = round(iv_now, 4) if iv_now is not None else None
+        c["session"] = session
         record_card_track(TRACER, c, mid_now, spot_now,
                           bid_now=q.get("bid") or None, ask_now=q.get("ask") or None,
                           iv_now=iv_now)
@@ -213,7 +219,7 @@ if __name__ == "__main__":
             bench_quotes[sym] = round(live_yf.fetch_spot(sym), 2)
         except Exception:
             bench_quotes[sym] = None
-    record_bench(TRACER, TODAY, bench_quotes)
+    record_bench(TRACER, TODAY, bench_quotes, session=session)
 
     # regime 觀察欄位(只記錄不裁決;MEASURE.md §4):籃子 IV 水位/變化 + 籃子 20/60 日報酬
     after_iv = series_by_key(IV_HISTORY)
@@ -222,7 +228,7 @@ if __name__ == "__main__":
     all_recs = list(read_records(TRACER))
     px_reg = basket_price_regime([r for r in all_recs if r.get("kind") == "scan"])
     regime_line = describe(iv_reg, px_reg)
-    append_record(TRACER, {"kind": "regime", "iv": iv_reg, "price": px_reg})
+    record_regime(TRACER, TODAY, iv_reg, px_reg, session=session)
     book = paper_book(all_recs, today=TODAY)
 
     # 人看的報告(上半白話、下半 Details)
@@ -244,6 +250,6 @@ if __name__ == "__main__":
     print(f"\n存活者 {len(survivors)} / 排除 {n_ex} / NO_DATA {n_nd};"
           f"tracer 收 {saved} 筆、回填 {filled}/{len(due)}、卡追蹤 {tracked} 張"
           f" → RADAR.md 已更新")
-    print(regime_line)
+    print(f"session={session} · {regime_line}")
     for r in survivors:
         print(format_card(r["card"]))

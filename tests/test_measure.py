@@ -122,6 +122,15 @@ def test_regime_prototype_labels_and_conditional():
     assert cond["TAIL/PASS"]["mean"] == -3.0 and cond["TAIL/EXCLUDE"]["n"] == 20
 
 
+def test_session_breakdown_counts_unstamped_as_none():
+    from ai_radar.measure import session_breakdown
+    recs = [_scan("A", "2026-07-01T10:00", "PASS", 100),
+            {**_scan("A", "2026-09-12T10:00", "PASS", 100), "session": "after_close"},
+            {"kind": "bench", "ts": "2026-09-12T10:00", "quotes": {}, "session": "intraday"}]
+    sb = session_breakdown(recs)
+    assert sb["scan"] == {"None": 1, "after_close": 1} and sb["bench"] == {"intraday": 1}
+
+
 def test_measure_all_and_render_do_not_crash_on_empty():
     m = measure_all([], [])
     txt = render_text(m)

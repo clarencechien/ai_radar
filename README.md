@@ -46,7 +46,7 @@ nightly Action 只認 **main** 上的程式;把這個分支合進 main 之後,�
 
 - **賽馬 T1/T2 tier_map + 按名破壞線**:哪檔算 T1 雲廠/T2 敘事股、各自的論點破壞指標(SPEC §賽馬分層)。
 - **G0 曝險護欄**:你的台積總曝險數字(工作+資產+部位),`config.json → exposure`。
-- **11 月美股改冬令**:把 `.github/workflows/nightly-live.yml` 的 cron 從 `0 14` 改 `0 15`。
+- **11 月美股改冬令(11/1)**:把 `.github/workflows/nightly-live.yml` 的 cron 從 `23 14` 改 `23 15`(分鐘保持非整點,GitHub 排程整點最擠)。
 - **(可選)ETF 全量持股**:宇宙來源正式採 **Yahoo top10 聯集**——本工具獵大象,
   SMH 前十大即佔 72.5% 資產,ETF 長尾小部位歸湯姆熊(`optscnr`)管。若日後想涵蓋
   長尾,把發行商 CSV 直接下載網址貼進 [`config/etf_sources.json`](./config/etf_sources.json)
@@ -82,7 +82,7 @@ NO_DATA、自舉/tracer 進度),由 nightly Action 自動生成並 commit,不用
 
 ## 自動化
 - `tests`(push/PR/手動):純邏輯 + 合成資料端到端回歸,不碰網路。
-- `nightly-live`(台灣平日 22:00,美股夏令盤中;可手動觸發):跑
+- `nightly-live`(台灣平日 22:23,美股夏令盤中;可手動觸發;GitHub 排程會延遲,每筆紀錄帶 `session` 標記盤中/收盤後):跑
   `notebooks/nightly_scan.py` **全宇宙掃描**(ETF top10 聯集,週更快照)
   → 每檔:催化劑時鐘 → 路由 → 雙透鏡 → 出卡/排除 → tracer;跑完把
   `RADAR.md` + `state/` 自動 commit 回 main。美股休市日自動跳過。
@@ -99,7 +99,7 @@ RADAR.md       每晚自動生成的人讀報告(上半白話、下半 Details)
 config/        config.json(閾值)+ gics_map/refine(歸桶)+ universe_seed/etf_sources(宇宙)
 src/ai_radar/  Block 1–6 模組 + scan.py(產線)+ live_yf.py(Yahoo 轉接)+ report.py(報告)
 notebooks/     nightly_scan.py(★正式進入點)+ measure.py(量測)+ colab_verify_block1/2.py(開發驗證)
-tests/         72 個離線測試(純邏輯 + 合成資料端到端)
+tests/         75 個離線測試(純邏輯 + 合成資料端到端)
 MEASURE.md     量測基準(2026-09-11)與一個月後對照表
 state/         append-only;iv_history/tracer/bucket_map/universe 進版控,自舉靠它累積
 ```

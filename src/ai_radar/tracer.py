@@ -141,23 +141,37 @@ def record_card_track(path: str, card_ref: dict, mid_now, spot_now,
         "scan_ts": card_ref.get("scan_ts"), "premium_then": p0,
         "mid_now": mid_now, "bid_now": bid_now, "ask_now": ask_now, "iv_now": iv_now,
         "spot_now": spot_now, "dte_left": card_ref.get("dte_left"),
-        "option_ret_pct": ret})
+        "session": card_ref.get("session"), "option_ret_pct": ret})
 
 
-def record_bench(path: str, today: date, quotes: dict) -> dict | None:
+def _has_today(path: str, kind: str, today: date) -> bool:
+    today_iso = today.isoformat()
+    return any(r.get("kind") == kind and str(r.get("ts", ""))[:10] == today_iso
+               for r in read_records(path))
+
+
+def record_bench(path: str, today: date, quotes: dict, session=None) -> dict | None:
     """每晚一筆基準收盤(kind=bench,如 {"SMH": 312.1, "SPY": 640.2});同日冪等。
 
     模擬帳本拿它算「同期間買 SMH」的對照(MEASURE.md §2.3)。缺值存 None(NO_DATA)。
+    session:盤中/收盤後標記(session.market_session),排程延遲時量測才分得開。
     """
-    today_iso = today.isoformat()
-    for b in benches(path):
-        if str(b.get("ts", ""))[:10] == today_iso:
-            return None
-    return append_record(path, {"kind": "bench", "quotes": dict(quotes)})
+    if _has_today(path, "bench", today):
+        return None
+    return append_record(path, {"kind": "bench", "quotes": dict(quotes), "session": session})
 
 
 def benches(path: str) -> list[dict]:
     return [r for r in read_records(path) if r.get("kind") == "bench"]
+
+
+def record_regime(path: str, today: date, iv_reg: dict, px_reg: dict,
+                  session=None) -> dict | None:
+    """每晚一筆 regime 觀察欄位(kind=regime);同日冪等(手動重跑不重灌)。"""
+    if _has_today(path, "regime", today):
+        return None
+    return append_record(path, {"kind": "regime", "iv": iv_reg, "price": px_reg,
+                                "session": session})
 
 
 def card_report(path: str) -> list[dict]:

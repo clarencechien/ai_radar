@@ -78,6 +78,7 @@ ai_radar/
     measure.py                  Block 6 量測:PASS/EXCLUDE vs 全宇宙、n_eff、卡報酬、substitute gap、凸性事件覆蓋、IV 走勢
     paper.py                    Block 6 模擬帳本:由 state 推導(進場/出場規則、ask→bid、delta/vega/theta 拆解、SMH 對照)
     regime.py                   Block 6 regime 觀察欄位(IV 水位/變化、籃子 20/60 日報酬;只記錄不裁決)
+    session.py                  美股交易時段標記(intraday/after_close/pre_open;排程延遲時樣本才分得開)
   notebooks/
     colab_verify_block1.py      Block 1 live 驗證(需 Colab)
     colab_verify_block2.py      Block 2 live 驗證(需 Colab,含診斷;開發除錯用)
@@ -97,6 +98,7 @@ ai_radar/
     test_e2e_offline.py         合成資料端到端(宇宙→…→tracer 報表)
     test_measure.py             Block 6 量測
     test_paper_regime.py        Block 6 模擬帳本 + regime + 依透鏡停追 + bench
+    test_session.py             交易時段標記 + session 進紀錄 + regime 同日冪等
   .github/workflows/test.yml    CI 純邏輯+合成 e2e 回歸(push/PR/手動)
   .github/workflows/nightly-live.yml  台灣 22:00 平日夜跑 live 掃描,state 樣本自動 commit 回 main(冬令要改 cron,見檔內註解)
 ```
@@ -164,6 +166,7 @@ ai_radar/
   - 模擬帳本 `paper.py` 是**推導**不是第二份狀態:進場=第一次上榜(有 ask 用 ask);槓桿 CLOSED=距到期 ≤21 天(追蹤已結束)、凸性 CLOSED=催化劑後第一筆標記;CENSORED=舊規則在事件前停追(不計分);清算價有 bid 用 bid。
   - **regime 只記錄不裁決**:兩季後拿條件式報酬決定要不要當閘。不要拿 10 日動能當閘(樣本顯示均值回歸)。
   - 一個月後:`python notebooks/measure.py` 填 `MEASURE.md` §3;n_eff < 20 的欄位當雜訊。
+  - **Action 實況(2026-09-11 查)**:nightly 55 次 54 成功、1 次(8/6)GitHub 沒給 runner 被取消;程式沒出過錯。但 cron 14:00 UTC 實際開跑漂到 15:00–23:20,8/27、8/28 是收盤後跑的。→ cron 改 `23 14 * * 1-5`(避開整點),每筆 scan/card_track/bench/regime 記 `session`;regime 紀錄改同日冪等。**11/1 冬令後 cron 改 `23 15 * * 1-5`**,否則 09:23 ET 開盤前跑。
 
 ## 10. 開放問題(落地時順手定)
 
@@ -180,7 +183,7 @@ ai_radar/
 
 ```bash
 pip install -r requirements.txt
-python -m pytest tests/ -v      # 應 72 passed(純邏輯 + 合成資料端到端)
+python -m pytest tests/ -v      # 應 75 passed(純邏輯 + 合成資料端到端)
 ```
 
 系統已上線自主運轉,接手前先弄清楚現場:
